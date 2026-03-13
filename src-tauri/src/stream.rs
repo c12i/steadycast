@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -113,7 +113,7 @@ fn rtmp_url(platform: &str, key: &str) -> String {
     }
 }
 
-fn build_args(config: &StreamConfig) -> Vec<String> {
+fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
     // -re: read video at native frame rate (required for stable RTMP ingest)
@@ -138,13 +138,19 @@ fn build_args(config: &StreamConfig) -> Vec<String> {
 
     args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
 
-    // Video encoding — YouTube requires consistent fps, 2-second keyframe interval, yuv420p
-    args.extend(["-c:v", "libx264", "-preset", "veryfast"].map(String::from));
-    args.extend(["-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k"].map(String::from));
-    args.extend(["-pix_fmt", "yuv420p", "-r", "30", "-g", "60"].map(String::from));
+    // Video encoding — settings-driven quality; YouTube requires yuv420p + 2-sec keyframes
+    let fps = quality.frame_rate.to_string();
+    let gop = (quality.frame_rate * 2).to_string();
+    let bufsize = format!(
+        "{}k",
+        quality.video_bitrate.trim_end_matches('k').parse::<u32>().unwrap_or(2500) * 2
+    );
+    args.extend(["-c:v", "libx264", "-preset", &quality.encoding_preset].map(String::from));
+    args.extend(["-b:v", &quality.video_bitrate, "-maxrate", &quality.video_bitrate, "-bufsize", &bufsize].map(String::from));
+    args.extend(["-pix_fmt", "yuv420p", "-r", &fps, "-g", &gop].map(String::from));
 
     // Audio encoding — 44100 Hz required by most RTMP ingest servers
-    args.extend(["-c:a", "aac", "-b:a", "128k", "-ar", "44100"].map(String::from));
+    args.extend(["-c:a", "aac", "-b:a", &quality.audio_bitrate, "-ar", "44100"].map(String::from));
 
     if let Some(dur) = config.duration_seconds {
         args.extend(["-t".into(), dur.to_string()]);
@@ -172,7 +178,10 @@ fn emit_log_lines(
         if line.is_empty() {
             continue;
         }
-        let event = FfmpegLogEvent { line: line.to_owned(), is_stderr };
+        let event = FfmpegLogEvent {
+            line: line.to_owned(),
+            is_stderr,
+        };
         {
             let mut logs = logs_arc.lock().unwrap();
             if logs.len() >= MAX_LOG_LINES {
@@ -200,6 +209,7 @@ fn spawn_monitor(
     is_stopping_arc: Arc<Mutex<bool>>,
     logs_arc: Arc<Mutex<VecDeque<FfmpegLogEvent>>>,
     caffeinate_arc: Arc<Mutex<Option<std::process::Child>>>,
+    quality: crate::settings::AppSettings,
 ) {
     tokio::spawn(async move {
         use tauri_plugin_shell::process::CommandEvent;
@@ -275,7 +285,7 @@ fn spawn_monitor(
                 cfg
             };
 
-            let args = build_args(&next_config);
+            let args = build_args(&next_config, &quality);
 
             // Respawn FFmpeg with the next track.
             match app
@@ -339,7 +349,13 @@ pub async fn start_stream(
     initial_config.music_path = playlist[0].clone();
     *state.base_config.lock().unwrap() = Some(initial_config.clone());
 
-    let args = build_args(&initial_config);
+    // Load quality settings from DB (falls back to defaults if not set)
+    let quality = app
+        .try_state::<crate::db::DbState>()
+        .map(|s| crate::settings::get_settings(s))
+        .unwrap_or_default();
+
+    let args = build_args(&initial_config, &quality);
 
     let (rx, child) = app
         .shell()
@@ -364,6 +380,7 @@ pub async fn start_stream(
         state.is_stopping.clone(),
         state.logs.clone(),
         state.caffeinate.clone(),
+        quality,
     );
 
     Ok(())
@@ -394,7 +411,11 @@ pub fn stream_status(state: tauri::State<'_, StreamState>) -> StreamStatus {
         .map(|t| t.elapsed().as_secs())
         .unwrap_or(0);
     let current_track_index = *state.track_index.lock().unwrap();
-    StreamStatus { is_running, elapsed_seconds, current_track_index }
+    StreamStatus {
+        is_running,
+        elapsed_seconds,
+        current_track_index,
+    }
 }
 
 #[tauri::command]
@@ -413,7 +434,10 @@ pub fn get_current_stream_info(state: tauri::State<'_, StreamState>) -> Option<C
     let cfg = state.base_config.lock().unwrap().clone()?;
     let current_track_index = *state.track_index.lock().unwrap();
     let playlist = state.playlist.lock().unwrap();
-    let music_path = playlist.get(current_track_index).cloned().unwrap_or(cfg.music_path.clone());
+    let music_path = playlist
+        .get(current_track_index)
+        .cloned()
+        .unwrap_or(cfg.music_path.clone());
     let elapsed_seconds = state
         .start_time
         .lock()
