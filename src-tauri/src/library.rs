@@ -92,10 +92,20 @@ fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-fn ext_for_type(asset_type: &str) -> &'static str {
-    match asset_type {
-        "video" => "mp4",
-        _ => "mp3",
+fn ext_for_url(url: &str) -> &'static str {
+    let lower = url.split('?').next().unwrap_or(url).to_lowercase();
+    if lower.ends_with(".webm") {
+        "webm"
+    } else if lower.ends_with(".ogg") {
+        "ogg"
+    } else if lower.ends_with(".oga") {
+        "oga"
+    } else if lower.ends_with(".ogv") {
+        "ogv"
+    } else if lower.ends_with(".mp4") {
+        "mp4"
+    } else {
+        "mp3"
     }
 }
 
@@ -119,7 +129,7 @@ pub async fn download_asset(
         .clone();
 
     let dir = cache_dir(&app)?;
-    let ext = ext_for_type(&asset.asset_type);
+    let ext = ext_for_url(&asset.url);
     let local_path = dir.join(format!("{}.{}", id, ext));
 
     // Return early if already cached and file exists

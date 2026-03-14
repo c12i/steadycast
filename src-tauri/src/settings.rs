@@ -55,13 +55,27 @@ pub fn get_settings(state: tauri::State<'_, DbState>) -> AppSettings {
         .ok()
     };
 
-    if let Some(v) = get("video_bitrate") { s.video_bitrate = v; }
-    if let Some(v) = get("audio_bitrate") { s.audio_bitrate = v; }
-    if let Some(v) = get("frame_rate").and_then(|s| s.parse().ok()) { s.frame_rate = v; }
-    if let Some(v) = get("encoding_preset") { s.encoding_preset = v; }
-    if let Some(v) = get("default_platform") { s.default_platform = v; }
-    if let Some(v) = get("music_volume").and_then(|s| s.parse().ok()) { s.music_volume = v; }
-    if let Some(v) = get("ambient_volume").and_then(|s| s.parse().ok()) { s.ambient_volume = v; }
+    if let Some(v) = get("video_bitrate") {
+        s.video_bitrate = v;
+    }
+    if let Some(v) = get("audio_bitrate") {
+        s.audio_bitrate = v;
+    }
+    if let Some(v) = get("frame_rate").and_then(|s| s.parse().ok()) {
+        s.frame_rate = v;
+    }
+    if let Some(v) = get("encoding_preset") {
+        s.encoding_preset = v;
+    }
+    if let Some(v) = get("default_platform") {
+        s.default_platform = v;
+    }
+    if let Some(v) = get("music_volume").and_then(|s| s.parse().ok()) {
+        s.music_volume = v;
+    }
+    if let Some(v) = get("ambient_volume").and_then(|s| s.parse().ok()) {
+        s.ambient_volume = v;
+    }
 
     s
 }
@@ -104,7 +118,9 @@ pub fn get_cache_stats(state: tauri::State<'_, DbState>) -> CacheStats {
         .prepare("SELECT asset_type, COALESCE(file_size_bytes, 0) FROM cached_assets")
         .unwrap();
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .unwrap();
 
     for row in rows.flatten() {

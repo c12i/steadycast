@@ -5,7 +5,6 @@ use uuid::Uuid;
 
 use crate::db::DbState;
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Preset {
     pub id: String,
@@ -57,8 +56,7 @@ pub fn get_presets(state: tauri::State<'_, DbState>) -> Vec<Preset> {
 
     stmt.query_map([], |row| {
         let music_ids_json: String = row.get(4)?;
-        let music_ids: Vec<String> =
-            serde_json::from_str(&music_ids_json).unwrap_or_default();
+        let music_ids: Vec<String> = serde_json::from_str(&music_ids_json).unwrap_or_default();
         Ok(Preset {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -86,8 +84,7 @@ pub fn save_preset(
     ambient_id: Option<String>,
 ) -> Result<Preset, String> {
     let id = Uuid::new_v4().to_string();
-    let music_ids_json =
-        serde_json::to_string(&music_ids).map_err(|e| e.to_string())?;
+    let music_ids_json = serde_json::to_string(&music_ids).map_err(|e| e.to_string())?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -115,10 +112,7 @@ pub fn save_preset(
 }
 
 #[tauri::command]
-pub fn delete_preset(
-    state: tauri::State<'_, DbState>,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_preset(state: tauri::State<'_, DbState>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     conn.execute(
         "DELETE FROM presets WHERE id = ?1 AND is_builtin = 0",
@@ -156,7 +150,11 @@ pub async fn import_preset_from_url(
             .map_err(|e| e.to_string())?;
 
         for asset in &manifest.custom_assets {
-            let ext = if asset.asset_type == "video" { "mp4" } else { "mp3" };
+            let ext = if asset.asset_type == "video" {
+                "mp4"
+            } else {
+                "mp3"
+            };
             let local_path = cache_dir.join(format!("{}.{}", asset.id, ext));
 
             if !local_path.exists() {

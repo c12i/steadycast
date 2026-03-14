@@ -22,8 +22,7 @@ pub fn run() {
             // Ensure cache and user_assets subdirs exist
             std::fs::create_dir_all(app_dir.join("cache"))?;
             std::fs::create_dir_all(app_dir.join("user_assets"))?;
-            let conn = db::init_db(&app_dir)
-                .map_err(|e| format!("DB init failed: {e}"))?;
+            let conn = db::init_db(&app_dir).map_err(|e| format!("DB init failed: {e}"))?;
             app.manage(db::DbState(std::sync::Mutex::new(conn)));
             Ok(())
         })

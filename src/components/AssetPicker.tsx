@@ -4,8 +4,8 @@ import { CatalogAsset, LibraryResponse, Preset, UserAsset } from "../types";
 
 type Tab = "presets" | "music" | "ambient" | "video";
 
-const MUSIC_GENRES = ["all", "lofi-hiphop", "lofi-jazz", "chillhop", "lofi-ambient", "study"];
-const AMBIENT_CATS = ["all", "rain", "fireplace", "cafe", "forest", "ocean", "thunderstorm", "city", "wind", "white-noise"];
+const MUSIC_GENRES = ["all", "lofi-hiphop", "chillhop", "cafe-jazz", "piano", "synthwave", "lofi-ambient"];
+const AMBIENT_CATS = ["all", "rain", "thunderstorm", "forest", "ocean", "city", "white-noise"];
 const VIDEO_CATS = ["all", "cozy-room", "nature", "city", "abstract"];
 
 interface Props {

@@ -132,7 +132,6 @@ pub fn save_preferences(
     };
     upsert("default_platform", &preferences.default_platform).map_err(|e| e.to_string())?;
     upsert("music_volume", &preferences.music_volume.to_string()).map_err(|e| e.to_string())?;
-    upsert("ambient_volume", &preferences.ambient_volume.to_string())
-        .map_err(|e| e.to_string())?;
+    upsert("ambient_volume", &preferences.ambient_volume.to_string()).map_err(|e| e.to_string())?;
     Ok(())
 }

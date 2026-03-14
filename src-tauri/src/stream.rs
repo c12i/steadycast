@@ -143,14 +143,39 @@ fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> 
     let gop = (quality.frame_rate * 2).to_string();
     let bufsize = format!(
         "{}k",
-        quality.video_bitrate.trim_end_matches('k').parse::<u32>().unwrap_or(2500) * 2
+        quality
+            .video_bitrate
+            .trim_end_matches('k')
+            .parse::<u32>()
+            .unwrap_or(2500)
+            * 2
     );
     args.extend(["-c:v", "libx264", "-preset", &quality.encoding_preset].map(String::from));
-    args.extend(["-b:v", &quality.video_bitrate, "-maxrate", &quality.video_bitrate, "-bufsize", &bufsize].map(String::from));
+    args.extend(
+        [
+            "-b:v",
+            &quality.video_bitrate,
+            "-maxrate",
+            &quality.video_bitrate,
+            "-bufsize",
+            &bufsize,
+        ]
+        .map(String::from),
+    );
     args.extend(["-pix_fmt", "yuv420p", "-r", &fps, "-g", &gop].map(String::from));
 
     // Audio encoding — 44100 Hz required by most RTMP ingest servers
-    args.extend(["-c:a", "aac", "-b:a", &quality.audio_bitrate, "-ar", "44100"].map(String::from));
+    args.extend(
+        [
+            "-c:a",
+            "aac",
+            "-b:a",
+            &quality.audio_bitrate,
+            "-ar",
+            "44100",
+        ]
+        .map(String::from),
+    );
 
     if let Some(dur) = config.duration_seconds {
         args.extend(["-t".into(), dur.to_string()]);

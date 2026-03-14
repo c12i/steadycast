@@ -111,10 +111,7 @@ pub fn get_user_assets(state: tauri::State<'_, DbState>) -> Vec<UserAsset> {
 }
 
 #[tauri::command]
-pub fn delete_user_asset(
-    state: tauri::State<'_, DbState>,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_user_asset(state: tauri::State<'_, DbState>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     let res: rusqlite::Result<String> = conn.query_row(
         "SELECT local_path FROM cached_assets WHERE id = ?1 AND source = 'user'",
