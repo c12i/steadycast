@@ -119,15 +119,14 @@ fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> 
     // -re: read video at native frame rate (required for stable RTMP ingest)
     // -stream_loop -1: loop forever
     args.extend(["-re", "-stream_loop", "-1", "-i", &config.video_path].map(String::from));
-    // Music plays once — FFmpeg exits cleanly (code 0) when the track ends
+
     args.extend(["-i", &config.music_path].map(String::from));
 
     if let Some(ref ambient) = config.ambient_path {
         // Ambient loops forever
         args.extend(["-stream_loop", "-1", "-i", ambient].map(String::from));
-        // duration=first: amix ends when the first input (music) ends
         let filter = format!(
-            "[1]volume={}[a1];[2]volume={}[a2];[a1][a2]amix=inputs=2:duration=first[aout]",
+            "[1]volume={}[a1];[2]volume={}[a2];[a1][a2]amix=inputs=2:duration=longest[aout]",
             config.music_volume, config.ambient_volume
         );
         args.extend(["-filter_complex".into(), filter]);
@@ -181,7 +180,6 @@ fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> 
         args.extend(["-t".into(), dur.to_string()]);
     }
 
-    // Exit when the shortest output stream (audio/music) ends → triggers playlist advance
     args.push("-shortest".into());
 
     args.extend(["-f", "flv"].map(String::from));

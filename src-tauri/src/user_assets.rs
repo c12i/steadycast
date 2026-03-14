@@ -128,3 +128,69 @@ pub fn delete_user_asset(state: tauri::State<'_, DbState>, id: String) -> Result
     .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn rename_user_asset(
+    state: tauri::State<'_, DbState>,
+    id: String,
+    name: String,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    conn.execute(
+        "UPDATE cached_assets SET name = ?1 WHERE id = ?2 AND source = 'user'",
+        params![name, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Saves a base64-encoded WAV from the frontend as a user asset (music).
+/// Base64 avoids the ~3× overhead of JSON-serializing a byte array.
+#[tauri::command]
+pub async fn save_synth_track(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::db::DbState>,
+    wav_b64: String,
+    name: String,
+) -> Result<UserAsset, String> {
+    use base64::Engine;
+    let wav_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&wav_b64)
+        .map_err(|e| format!("Base64 decode failed: {e}"))?;
+
+    let dest_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("user_assets");
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    let id = format!("synth-{}", uuid::Uuid::new_v4());
+    let dest = dest_dir.join(format!("{}.wav", id));
+
+    std::fs::write(&dest, &wav_bytes).map_err(|e| format!("Write failed: {e}"))?;
+
+    let file_size = wav_bytes.len() as u64;
+    let path_str = dest.to_string_lossy().into_owned();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let conn = state.0.lock().unwrap();
+    conn.execute(
+        "INSERT INTO cached_assets (id, asset_type, source, name, local_path, file_size_bytes, cached_at)
+         VALUES (?1, 'music', 'user', ?2, ?3, ?4, ?5)",
+        rusqlite::params![id, name, path_str, file_size as i64, now as i64],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(UserAsset {
+        id,
+        name,
+        asset_type: "music".into(),
+        local_path: path_str,
+        file_size_bytes: Some(file_size),
+        cached_at: now,
+    })
+}

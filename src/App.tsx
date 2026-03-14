@@ -6,14 +6,17 @@ import AssetPicker from "./components/AssetPicker";
 import StreamConfig from "./components/StreamConfig";
 import StatusBar from "./components/StatusBar";
 import SettingsPanel from "./components/SettingsPanel";
+import { SyntheticEngine, SynthConfig, renderSynthTrack, VIBE_DEFAULT_BPM } from "./lib/SyntheticEngine";
 import {
   AppSettings,
+  AudioMode,
   CacheStats,
   CatalogAsset,
   LibraryResponse,
   Platform,
   Preferences,
   Preset,
+  RenderJob,
   StreamStatus,
   TrackChangedPayload,
   UserAsset,
@@ -57,6 +60,26 @@ export default function App() {
   const [musicVolume, setMusicVolume] = useState(0.8);
   const [ambientVolume, setAmbientVolume] = useState(0.5);
   const [durationSeconds, setDurationSeconds] = useState<number | undefined>(undefined);
+
+  const [audioMode, setAudioMode] = useState<AudioMode>("library");
+  const [synthConfig, setSynthConfig] = useState<SynthConfig>({
+    vibe: "Melancholy",
+    bpm: VIBE_DEFAULT_BPM["Melancholy"],
+    density: "Medium",
+    instrument: "Piano",
+    drums: {
+      enabled: true,
+      pattern: "boom-bap",
+      kick: true,
+      snare: true,
+      hihat: true,
+    },
+  });
+  const synthPreviewEngineRef = useRef<SyntheticEngine | null>(null);
+  const [synthPreviewing, setSynthPreviewing] = useState(false);
+  const [renderJobs, setRenderJobs] = useState<RenderJob[]>([]);
+  const renderQueueRef = useRef<Array<() => Promise<void>>>([]);
+  const renderRunningRef = useRef(false);
 
   const [status, setStatus] = useState<StreamStatus>({
     is_running: false,
@@ -313,7 +336,11 @@ export default function App() {
       return;
     }
     if (selectedMusic.length === 0) {
-      setStreamError("Select at least one music track.");
+      setStreamError(
+        audioMode === "synthetic"
+          ? "Generate some tracks first — use the Generate button in Synthetic Mode."
+          : "Select at least one music track."
+      );
       return;
     }
     const undownloaded = selectedMusic.filter((m) => !m.local_path);
@@ -327,6 +354,14 @@ export default function App() {
     }
     setStreamError(null);
     setCurrentTrackIndex(0);
+
+    // Stop any running preview before going live
+    if (synthPreviewEngineRef.current) {
+      await synthPreviewEngineRef.current.stopPreview();
+      synthPreviewEngineRef.current = null;
+      setSynthPreviewing(false);
+    }
+
     try {
       const playlist = selectedMusic.map((m) => m.local_path!);
       await invoke("start_stream", {
@@ -354,6 +389,7 @@ export default function App() {
     ambientVolume,
     platform,
     durationSeconds,
+    audioMode,
   ]);
 
   const handleStopStream = useCallback(async () => {
@@ -364,6 +400,89 @@ export default function App() {
       setStreamError(String(e));
     }
   }, []);
+
+  const handleSynthRegenerate = useCallback(() => {
+    synthPreviewEngineRef.current?.regenerate();
+  }, []);
+
+  const handleSynthConfigChange = useCallback((partial: Partial<SynthConfig>) => {
+    setSynthConfig((prev) => {
+      let next: SynthConfig;
+      if (partial.drums) {
+        next = { ...prev, drums: { ...prev.drums, ...partial.drums } };
+      } else {
+        // When vibe changes, snap BPM to that vibe's default feel
+        next = partial.vibe
+          ? { ...prev, ...partial, bpm: VIBE_DEFAULT_BPM[partial.vibe] }
+          : { ...prev, ...partial };
+      }
+      synthPreviewEngineRef.current?.updateConfig(partial);
+      return next;
+    });
+  }, []);
+
+  const handleRandomizeSynth = useCallback((newConfig: SynthConfig) => {
+    setSynthConfig(newConfig);
+    synthPreviewEngineRef.current?.updateConfig(newConfig);
+  }, []);
+
+  const handleToggleSynthPreview = useCallback(async () => {
+    if (synthPreviewing) {
+      await synthPreviewEngineRef.current?.stopPreview();
+      synthPreviewEngineRef.current = null;
+      setSynthPreviewing(false);
+    } else {
+      const engine = new SyntheticEngine(synthConfig);
+      synthPreviewEngineRef.current = engine;
+      await engine.startPreview();
+      setSynthPreviewing(true);
+    }
+  }, [synthPreviewing, synthConfig]);
+
+  const _drainRenderQueue = useCallback(async () => {
+    if (renderRunningRef.current) return;
+    renderRunningRef.current = true;
+    while (renderQueueRef.current.length > 0) {
+      const task = renderQueueRef.current.shift()!;
+      await task();
+    }
+    renderRunningRef.current = false;
+  }, []);
+
+  const handleGenerateTrack = useCallback((durationSeconds: number) => {
+    const jobId = `render-${Date.now()}-${Math.random()}`;
+    const name = `Synth ${synthConfig.vibe}`;
+    // Snapshot config at queue time so changes don't affect in-flight renders
+    const configSnapshot = { ...synthConfig, drums: { ...synthConfig.drums } };
+
+    setRenderJobs((prev) => [...prev, { id: jobId, label: name, progress: 0 }]);
+
+    renderQueueRef.current.push(async () => {
+      try {
+        const { b64 } = await renderSynthTrack(configSnapshot, durationSeconds, (p) => {
+          setRenderJobs((prev) => prev.map((j) => j.id === jobId ? { ...j, progress: p } : j));
+        });
+        const asset = await invoke<UserAsset>("save_synth_track", { wavB64: b64, name });
+        await loadUserAssets();
+        setSelectedMusic((prev) => [...prev, asset]);
+      } catch (e) {
+        console.error("Track generation failed:", e);
+      } finally {
+        setRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
+      }
+    });
+
+    _drainRenderQueue();
+  }, [synthConfig, loadUserAssets, _drainRenderQueue]);
+
+  const handleRenameTrack = useCallback(async (id: string, name: string) => {
+    try {
+      await invoke("rename_user_asset", { id, name });
+      await loadUserAssets();
+    } catch (e) {
+      console.error("Rename failed:", e);
+    }
+  }, [loadUserAssets]);
 
   const handleOpenPreview = useCallback(async () => {
     try { await invoke("open_preview_window"); } catch (_) {}
@@ -444,6 +563,18 @@ export default function App() {
             onUploadAsset={handleUploadAsset}
             onDeleteUserAsset={handleDeleteUserAsset}
             onDownloadAsset={handleDownloadAsset}
+            audioMode={audioMode}
+            synthConfig={synthConfig}
+            synthPreviewing={synthPreviewing}
+            renderJobs={renderJobs}
+            onAudioModeChange={setAudioMode}
+            onSynthConfigChange={handleSynthConfigChange}
+            onSynthRegenerate={handleSynthRegenerate}
+            onToggleSynthPreview={handleToggleSynthPreview}
+            onGenerateTrack={handleGenerateTrack}
+            onToggleSynthTrack={handleToggleMusic}
+            onRandomizeSynth={handleRandomizeSynth}
+            onRenameSynthTrack={handleRenameTrack}
           />
         </div>
 

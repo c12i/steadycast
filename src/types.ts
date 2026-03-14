@@ -138,6 +138,14 @@ export interface StreamConfig {
   duration_seconds?: number;
 }
 
+export type AudioMode = "library" | "synthetic";
+
+export interface RenderJob {
+  id: string;
+  label: string;
+  progress: number; // 0..1
+}
+
 export interface StreamStatus {
   is_running: boolean;
   elapsed_seconds: number;

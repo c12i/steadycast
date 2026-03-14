@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { CatalogAsset, LibraryResponse, Preset, UserAsset } from "../types";
+import { AudioMode, CatalogAsset, LibraryResponse, Preset, RenderJob, UserAsset } from "../types";
+import SyntheticPanel from "./SyntheticPanel";
+import { SynthConfig } from "../lib/SyntheticEngine";
 
 type Tab = "presets" | "music" | "ambient" | "video";
 
@@ -28,6 +30,18 @@ interface Props {
   onUploadAsset: (type: "video" | "music" | "ambient") => void;
   onDeleteUserAsset: (id: string) => void;
   onDownloadAsset: (id: string) => Promise<string>; // returns local_path
+  audioMode: AudioMode;
+  synthConfig: SynthConfig;
+  synthPreviewing: boolean;
+  renderJobs: RenderJob[];
+  onAudioModeChange: (mode: AudioMode) => void;
+  onSynthConfigChange: (partial: Partial<SynthConfig>) => void;
+  onSynthRegenerate: () => void;
+  onToggleSynthPreview: () => void;
+  onGenerateTrack: (durationSeconds: number) => void;
+  onToggleSynthTrack: (asset: UserAsset) => void;
+  onRandomizeSynth: (config: SynthConfig) => void;
+  onRenameSynthTrack: (id: string, name: string) => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -121,6 +135,18 @@ export default function AssetPicker({
   onUploadAsset,
   onDeleteUserAsset,
   onDownloadAsset,
+  audioMode,
+  synthConfig,
+  synthPreviewing,
+  renderJobs,
+  onAudioModeChange,
+  onSynthConfigChange,
+  onSynthRegenerate,
+  onToggleSynthPreview,
+  onGenerateTrack,
+  onToggleSynthTrack,
+  onRandomizeSynth,
+  onRenameSynthTrack,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("music");
   const [genreFilter, setGenreFilter] = useState("all");
@@ -401,6 +427,43 @@ export default function AssetPicker({
         {/* ── Music tab ───────────────────────────────────────────────────── */}
         {activeTab === "music" && (
           <>
+            {/* Mode toggle */}
+            <div className="flex rounded-md overflow-hidden border border-zinc-700 shrink-0">
+              {(["library", "synthetic"] as AudioMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  disabled={isStreaming}
+                  onClick={() => onAudioModeChange(mode)}
+                  className={`flex-1 py-1.5 text-xs font-medium capitalize transition-colors ${
+                    audioMode === mode
+                      ? "bg-purple-600 text-white"
+                      : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {mode === "library" ? "Library" : "Synthesizer"}
+                </button>
+              ))}
+            </div>
+
+            {audioMode === "synthetic" ? (
+              <SyntheticPanel
+                config={synthConfig}
+                isStreaming={isStreaming}
+                isPreviewing={synthPreviewing}
+                renderJobs={renderJobs}
+                synthTracks={userAssetsOfType("music").filter(a => a.id.startsWith("synth-"))}
+                selectedMusicIds={new Set(selectedMusic.map(m => m.id))}
+                onChange={onSynthConfigChange}
+                onRegenerate={onSynthRegenerate}
+                onTogglePreview={onToggleSynthPreview}
+                onGenerate={onGenerateTrack}
+                onToggleTrack={onToggleSynthTrack}
+                onDeleteTrack={onDeleteUserAsset}
+                onRandomize={onRandomizeSynth}
+                onRenameTrack={onRenameSynthTrack}
+              />
+            ) : (
+              <>
             <FilterPills options={MUSIC_GENRES} value={genreFilter} onChange={setGenreFilter} />
             <p className="text-[10px] text-zinc-500">
               Click tracks to build a playlist. They play in order and loop.
@@ -465,6 +528,8 @@ export default function AssetPicker({
             >
               + Upload Music
             </button>
+              </>
+            )}
           </>
         )}
 
