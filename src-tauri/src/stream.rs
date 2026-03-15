@@ -196,7 +196,7 @@ fn emit_log_lines(
     is_stderr: bool,
 ) {
     let raw = String::from_utf8_lossy(bytes);
-    for line in raw.split(|c| c == '\n' || c == '\r') {
+    for line in raw.split(['\n', '\r']) {
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -221,6 +221,7 @@ fn emit_log_lines(
 /// On a clean exit (code 0) it advances the playlist, respawns FFmpeg with the next
 /// track, and emits a `track-changed` event to the frontend. On a non-zero exit or
 /// when `is_stopping` is set, it clears state and exits.
+#[allow(clippy::too_many_arguments)]
 fn spawn_monitor(
     app: AppHandle,
     initial_rx: tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>,

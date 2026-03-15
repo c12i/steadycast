@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,7 +104,7 @@ pub async fn download_assets(
 async fn fetch_file(
     client: &reqwest::Client,
     url: &str,
-    dir: &PathBuf,
+    dir: &Path,
     id: &str,
     ext: &str,
 ) -> Result<PathBuf, String> {
