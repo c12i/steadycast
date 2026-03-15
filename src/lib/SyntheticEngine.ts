@@ -342,11 +342,11 @@ function makeSynth(instrument: Instrument): Tone.PolySynth {
       } as never);
 
     case "Pad":
-      // Slow attack, sustained — works especially well for Dreamy / Nostalgic
+      // Soft swell — triangle is far gentler than sawtooth, lower sustain keeps it from dominating
       return new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "sawtooth" },
-        envelope: { attack: 0.6, decay: 0.2, sustain: 0.85, release: 3.0 },
-        volume: -10,
+        oscillator: { type: "triangle" },
+        envelope: { attack: 0.9, decay: 0.4, sustain: 0.35, release: 4.0 },
+        volume: -15,
       } as never);
 
     default: // Piano

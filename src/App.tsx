@@ -65,6 +65,24 @@ export default function App() {
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [panelWidth, setPanelWidth]     = useState(320);
+  const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragState.current) return;
+      const delta  = dragState.current.startX - e.clientX;
+      const maxW   = Math.floor(window.innerWidth / 2);
+      setPanelWidth(Math.min(maxW, Math.max(240, dragState.current.startWidth + delta)));
+    };
+    const onUp = () => { dragState.current = null; };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, []);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -288,7 +306,7 @@ export default function App() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-hidden border-r border-zinc-800 flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col">
           <AssetPicker
             presets={presets}
             userAssets={userAssets}
@@ -322,7 +340,15 @@ export default function App() {
           />
         </div>
 
-        <div className="w-80 shrink-0 overflow-y-auto">
+        <div style={{ width: panelWidth }} className="shrink-0 overflow-y-auto relative border-l border-zinc-800">
+          {/* Drag handle */}
+          <div
+            onMouseDown={(e) => {
+              dragState.current = { startX: e.clientX, startWidth: panelWidth };
+              e.preventDefault();
+            }}
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-purple-500/50 active:bg-purple-500 transition-colors z-10"
+          />
           <StreamConfig
             platform={platform}
             streamKey={streamKey}
