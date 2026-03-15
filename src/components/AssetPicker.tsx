@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { Preset, RenderJob, UserAsset } from "../types";
+import { Preset, UserAsset } from "../types";
 import SyntheticPanel from "./SyntheticPanel";
 import { SynthConfig } from "../lib/SyntheticEngine";
 import { AmbientType, AMBIENT_PRESETS } from "../lib/AmbientEngine";
@@ -36,9 +36,7 @@ interface Props {
   // Synth music
   synthConfig: SynthConfig;
   synthPreviewing: boolean;
-  renderJobs: RenderJob[];
   onSynthConfigChange: (partial: Partial<SynthConfig>) => void;
-  onSynthRegenerate: () => void;
   onToggleSynthPreview: () => void;
   onGenerateTrack: (durationSeconds: number) => void;
   onToggleSynthTrack: (asset: UserAsset) => void;
@@ -90,9 +88,7 @@ export default function AssetPicker({
   onUseAmbientPreset,
   synthConfig,
   synthPreviewing,
-  renderJobs,
   onSynthConfigChange,
-  onSynthRegenerate,
   onToggleSynthPreview,
   onGenerateTrack,
   onToggleSynthTrack,
@@ -418,11 +414,9 @@ export default function AssetPicker({
                 config={synthConfig}
                 isStreaming={isStreaming}
                 isPreviewing={synthPreviewing}
-                renderJobs={renderJobs}
                 synthTracks={userAssetsOfType("music").filter(a => a.id.startsWith("synth-"))}
                 selectedMusicIds={new Set(selectedMusic.map(m => m.id))}
                 onChange={onSynthConfigChange}
-                onRegenerate={onSynthRegenerate}
                 onTogglePreview={onToggleSynthPreview}
                 onGenerate={onGenerateTrack}
                 onToggleTrack={onToggleSynthTrack}

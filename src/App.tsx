@@ -273,6 +273,9 @@ export default function App() {
     <div className="flex flex-col h-screen overflow-hidden">
       <AppHeader
         status={status}
+        renderJobs={synth.renderJobs}
+        completedRenders={synth.completedRenders}
+        onClearCompleted={synth.clearCompletedRender}
         onStart={handleStartStream}
         onStop={handleStopStream}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -305,9 +308,7 @@ export default function App() {
             onDeleteUserAsset={handleDeleteUserAsset}
             synthConfig={synth.config}
             synthPreviewing={synth.previewing}
-            renderJobs={synth.renderJobs}
             onSynthConfigChange={synth.updateConfig}
-            onSynthRegenerate={synth.regenerate}
             onToggleSynthPreview={synth.togglePreview}
             onGenerateTrack={synth.generateTrack}
             onToggleSynthTrack={handleToggleMusic}

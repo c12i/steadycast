@@ -9,6 +9,18 @@ export type Density    = "Sparse" | "Medium" | "Lush";
 export type Instrument = "Piano"  | "Rhodes" | "Guitar" | "Vibraphone" | "Pad";
 export type DrumPattern = "boom-bap" | "four-on-floor" | "half-time" | "trap" | "breakbeat";
 
+/** Character of the high melodic voice layered over the chords. */
+export type MelodyStyle = "off" | "flute" | "whistle" | "bell" | "pluck";
+
+export interface MelodyStyleMeta { id: MelodyStyle; label: string; desc: string }
+export const MELODY_STYLES: MelodyStyleMeta[] = [
+  { id: "off",     label: "Off",     desc: "No melody line"              },
+  { id: "flute",   label: "Flute",   desc: "Soft sine, gentle filter"    },
+  { id: "whistle", label: "Whistle", desc: "Triangle, bright & airy"     },
+  { id: "bell",    label: "Bell",    desc: "Percussive, fast decay"       },
+  { id: "pluck",   label: "Pluck",   desc: "Short sawtooth, bright pluck"},
+];
+
 export interface DrumConfig {
   enabled: boolean;
   pattern: DrumPattern;
@@ -23,6 +35,12 @@ export interface SynthConfig {
   density: Density;
   instrument: Instrument;
   drums: DrumConfig;
+  /** Melodic voice character. Default: "flute". */
+  melody: MelodyStyle;
+  /** Reverb wetness 0–1. Default: 0.5 → ~35% wet. */
+  reverbAmount: number;
+  /** Tone color / filter brightness 0–1. Default: 0.5 → neutral. */
+  warmth: number;
 }
 
 // ── Chord system ──────────────────────────────────────────────────────────────
@@ -186,7 +204,7 @@ const NAMED_DRUM_PATTERNS: Record<DrumPattern, { kick: number[]; snare: number[]
   "four-on-floor": { kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
   "half-time":     { kick: [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
   "trap":          { kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1] },
-  "breakbeat":     { kick: [1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0], hihat: [1,0,1,0,0,1,1,0,1,0,1,0,0,1,0,1] },
+  "breakbeat":     { kick: [1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0], hihat: [1,0,1,1,0,1,1,0,1,0,1,1,0,1,0,1] },
 };
 
 // ── Randomizer ────────────────────────────────────────────────────────────────
@@ -195,8 +213,13 @@ const ALL_VIBES: Vibe[]        = ["Melancholy","Warm","Jazzy","Dreamy","Nostalgi
 const ALL_INSTRUMENTS: Instrument[] = ["Piano","Rhodes","Guitar","Vibraphone","Pad"];
 const ALL_DENSITIES: Density[] = ["Sparse","Medium","Lush"];
 const ALL_PATTERNS: DrumPattern[] = ["boom-bap","four-on-floor","half-time","trap","breakbeat"];
+const ALL_MELODIES: MelodyStyle[] = ["off","flute","whistle","bell","pluck"];
 
 function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+function randRange(lo: number, hi: number, step = 0.1) {
+  const steps = Math.round((hi - lo) / step);
+  return lo + Math.round(Math.random() * steps) * step;
+}
 
 export function randomizeConfig(_current: SynthConfig): SynthConfig {
   const vibe = pick(ALL_VIBES);
@@ -213,6 +236,9 @@ export function randomizeConfig(_current: SynthConfig): SynthConfig {
       snare: Math.random() > 0.15,
       hihat: Math.random() > 0.3,
     },
+    melody:       pick(ALL_MELODIES),
+    reverbAmount: randRange(0.2, 0.8),
+    warmth:       randRange(0.2, 0.8),
   };
 }
 
@@ -245,6 +271,44 @@ function scaleMidi(rootMidi: number, scale: number[], degree: number): number {
 
 function jitter(max = 0.015) { return Math.random() * max; }
 function randVel(c: number, s = 0.07) { return Math.min(1, Math.max(0.01, c + (Math.random() * 2 - 1) * s)); }
+
+function makeMelodySynth(style: MelodyStyle): Tone.MonoSynth | null {
+  switch (style) {
+    case "off":
+      return null;
+    case "flute":
+      // Sine wave, subtle filter sweep — breathy and soft, no whistle
+      return new Tone.MonoSynth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.08, decay: 0.3, sustain: 0.2, release: 1.8 },
+        filterEnvelope: { attack: 0.1, decay: 0.4, sustain: 0.3, release: 1.2, baseFrequency: 400, octaves: 1.5 },
+        volume: -15,
+      });
+    case "bell":
+      // Fast decay, no sustain — percussive metallic ping
+      return new Tone.MonoSynth({
+        oscillator: { type: "sine" },
+        envelope: { attack: 0.001, decay: 0.9, sustain: 0, release: 1.5 },
+        filterEnvelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.6, baseFrequency: 600, octaves: 2.5 },
+        volume: -14,
+      });
+    case "pluck":
+      // Sawtooth + very fast decay — bright, short pluck
+      return new Tone.MonoSynth({
+        oscillator: { type: "sawtooth" },
+        envelope: { attack: 0.001, decay: 0.18, sustain: 0.01, release: 0.4 },
+        filterEnvelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.3, baseFrequency: 300, octaves: 2.5 },
+        volume: -13,
+      });
+    default: // "whistle" — original triangle tone
+      return new Tone.MonoSynth({
+        oscillator: { type: "triangle" },
+        envelope: { attack: 0.05, decay: 0.35, sustain: 0.25, release: 1.4 },
+        filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.4, release: 0.8, baseFrequency: 200, octaves: 3 },
+        volume: -12,
+      });
+  }
+}
 
 function makeSynth(instrument: Instrument): Tone.PolySynth {
   switch (instrument) {
@@ -326,22 +390,29 @@ function buildGraph(
         return c;
       })();
 
-  const reverb   = new Tone.Freeverb({ roomSize: 0.65, dampening: 2500, wet: 0.35 }).connect(reverbTarget);
+  // Warmth: tone-color filter on the wet/reverb bus. 0=dark(500Hz) → 0.5=neutral(1600Hz) → 1=bright(4000Hz)
+  const warmth     = config.warmth ?? 0.5;
+  const colorFreq  = Math.round(500 + warmth * 3500);
+  const colorFilter = new Tone.Filter({ frequency: colorFreq, type: "lowpass", rolloff: -12 }).connect(reverbTarget);
+  disposables.push(colorFilter);
+
+  // Reverb: wet scales 0→0.05, 0.5→0.35, 1→0.70
+  const reverbWet = (config.reverbAmount ?? 0.5) * 0.7;
+  const reverb   = new Tone.Freeverb({ roomSize: 0.65, dampening: 2500, wet: reverbWet }).connect(colorFilter);
   const pianoLPF = new Tone.Filter({ frequency: 1400, type: "lowpass", rolloff: -12 }).connect(reverb);
   disposables.push(reverb, pianoLPF);
 
   const synth  = makeSynth(config.instrument);
   // Cap polyphony to prevent voice-stealing clicks
   (synth as Tone.PolySynth).maxPolyphony = 6;
-  const melody = new Tone.MonoSynth({
-    oscillator: { type: "triangle" },
-    envelope: { attack: 0.05, decay: 0.35, sustain: 0.25, release: 1.4 },
-    filterEnvelope: { attack: 0.06, decay: 0.2, sustain: 0.4, release: 0.8, baseFrequency: 200, octaves: 3 },
-    volume: -12,
-  });
   synth.connect(pianoLPF);
-  melody.connect(reverb);
-  disposables.push(synth, melody);
+  disposables.push(synth);
+
+  const melody = makeMelodySynth(config.melody ?? "flute");
+  if (melody) {
+    melody.connect(reverb);
+    disposables.push(melody);
+  }
 
   // Noise: start silent, fade in to avoid an audible click
   const noise = new Tone.Noise("pink");
@@ -364,17 +435,20 @@ function buildGraph(
     synth.triggerAttackRelease(notes, chordInt, time + jitter(0.004), randVel(0.45, 0.08));
   }, [...Array(progRef.current.length).keys()], chordInt);
 
-  const melSeq = new Tone.Sequence((time) => {
-    if (Math.random() > melProb) return;
-    melody.triggerAttackRelease(
-      melNotes[Math.floor(Math.random() * melNotes.length)],
-      melLen, time + jitter(0.015), randVel(0.3, 0.1),
-    );
-  }, [0, 1, 2, 3, 4, 5, 6, 7], "8n");
-
   chordSeq.start(0);
-  melSeq.start(0);
-  disposables.push(chordSeq as never, melSeq as never);
+  disposables.push(chordSeq as never);
+
+  if (melody) {
+    const melSeq = new Tone.Sequence((time) => {
+      if (Math.random() > melProb) return;
+      melody.triggerAttackRelease(
+        melNotes[Math.floor(Math.random() * melNotes.length)],
+        melLen, time + jitter(0.015), randVel(0.3, 0.1),
+      );
+    }, [0, 1, 2, 3, 4, 5, 6, 7], "8n");
+    melSeq.start(0);
+    disposables.push(melSeq as never);
+  }
 
   let drumSeq: Tone.Sequence | undefined;
   if (config.drums.enabled) {

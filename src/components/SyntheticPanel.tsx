@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Density, DrumConfig, DrumPattern, Instrument, SynthConfig, Vibe, randomizeConfig } from "../lib/SyntheticEngine";
-import { RenderJob, UserAsset } from "../types";
+import { Density, DrumConfig, DrumPattern, Instrument, MelodyStyle, MELODY_STYLES, SynthConfig, Vibe, randomizeConfig } from "../lib/SyntheticEngine";
+import { UserAsset } from "../types";
 
 interface Props {
   config: SynthConfig;
   isStreaming: boolean;
   isPreviewing: boolean;
-  renderJobs: RenderJob[];
   synthTracks: UserAsset[];
   selectedMusicIds: Set<string>;
   onChange: (partial: Partial<SynthConfig>) => void;
-  onRegenerate: () => void;
   onTogglePreview: () => void;
   onGenerate: (durationSeconds: number) => void;
   onToggleTrack: (asset: UserAsset) => void;
@@ -274,9 +272,9 @@ function SegmentedPicker<T extends string>({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function SyntheticPanel({
-  config, isStreaming, isPreviewing, renderJobs,
+  config, isStreaming, isPreviewing,
   synthTracks, selectedMusicIds,
-  onChange, onRegenerate, onTogglePreview, onGenerate,
+  onChange, onTogglePreview, onGenerate,
   onToggleTrack, onDeleteTrack, onRandomize, onRenameTrack,
   hideTracks,
 }: Props) {
@@ -332,19 +330,65 @@ export default function SyntheticPanel({
       <SegmentedPicker label="Instrument" options={INSTRUMENTS} value={config.instrument} disabled={busy} onSelect={(v) => onChange({ instrument: v })} />
       <DrumSection drums={config.drums} onChange={(d) => onChange({ drums: d as DrumConfig })} />
 
-      {/* Randomize */}
-      <button
-        onClick={() => onRandomize(randomizeConfig(config))}
-        disabled={busy}
-        className="w-full py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-      >
-        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-          <path d="M11 2h3v3l-1.3-1.3-2.1 2.1-.7-.7 2.1-2.1L11 2zM2 4h5v1H3.5l-.3.7L2 4zm0 7l1.2-1.7.3.7H7v1H2zm9 3l1.3-1.3-2.1-2.1.7-.7 2.1 2.1L14 11v3h-3zM7.5 7.5l1 1-4.2 4.2-.7-.7 3.9-4.5zm1-1l4.2-4.2.7.7-4.2 4.2-.7-.7z"/>
-        </svg>
-        Randomize
-      </button>
+      {/* Melody style */}
+      <div className="space-y-1.5">
+        <label className="text-xs text-zinc-400 font-medium">Melody</label>
+        <div className="space-y-1">
+          {MELODY_STYLES.map(({ id, label, desc }) => (
+            <button
+              key={id}
+              disabled={busy}
+              onClick={() => onChange({ melody: id as MelodyStyle })}
+              className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                config.melody === id
+                  ? "bg-purple-600/25 border border-purple-500/60 text-purple-200"
+                  : "bg-zinc-800/60 border border-zinc-700/60 text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200"
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <span className="text-xs font-semibold">{label}</span>
+              <span className="text-[10px] text-zinc-500 ml-2">{desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {/* Preview / Regenerate */}
+      {/* Sound shaping */}
+      <div className="space-y-3">
+        <label className="text-xs text-zinc-400 font-medium">Sound</label>
+        <div className="space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-[11px] text-zinc-500">Reverb</span>
+            <span className="text-[11px] text-zinc-500 font-mono">{Math.round((config.reverbAmount ?? 0.5) * 100)}%</span>
+          </div>
+          <input
+            type="range" min={0} max={1} step={0.05}
+            value={config.reverbAmount ?? 0.5}
+            disabled={busy}
+            onChange={(e) => onChange({ reverbAmount: Number(e.target.value) })}
+            className="w-full accent-purple-500 disabled:opacity-40"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-[11px] text-zinc-500">Warmth</span>
+            <span className="text-[11px] text-zinc-500 font-mono">
+              {(config.warmth ?? 0.5) < 0.35 ? "Dark" : (config.warmth ?? 0.5) > 0.65 ? "Bright" : "Neutral"}
+            </span>
+          </div>
+          <input
+            type="range" min={0} max={1} step={0.05}
+            value={config.warmth ?? 0.5}
+            disabled={busy}
+            onChange={(e) => onChange({ warmth: Number(e.target.value) })}
+            className="w-full accent-purple-500 disabled:opacity-40"
+          />
+          <div className="flex justify-between text-[10px] text-zinc-600">
+            <span>Dark</span><span>Bright</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Preview / Randomize */}
       <div className="flex gap-2">
         <button
           onClick={onTogglePreview}
@@ -362,14 +406,14 @@ export default function SyntheticPanel({
           )}
         </button>
         <button
-          onClick={onRegenerate}
-          disabled={!isPreviewing}
-          className="flex-1 py-2 rounded-md bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          onClick={() => onRandomize(randomizeConfig(config))}
+          disabled={busy}
+          className="flex-1 py-2 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
         >
           <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-            <path d="M13.5 2.5v4h-4l1.5-1.5A4.5 4.5 0 004.05 9.5H2.55A6 6 0 0111 4.586L12.5 3h1zm-11 7v-4h4L5 7l.001.001A4.5 4.5 0 0011.95 8.5h1.5A6 6 0 015 11.414L3.5 13H2.5V9.5z"/>
+            <path d="M11 2h3v3l-1.3-1.3-2.1 2.1-.7-.7 2.1-2.1L11 2zM2 4h5v1H3.5l-.3.7L2 4zm0 7l1.2-1.7.3.7H7v1H2zm9 3l1.3-1.3-2.1-2.1.7-.7 2.1 2.1L14 11v3h-3zM7.5 7.5l1 1-4.2 4.2-.7-.7 3.9-4.5zm1-1l4.2-4.2.7.7-4.2 4.2-.7-.7z"/>
           </svg>
-          Regenerate
+          Randomize
         </button>
       </div>
 
@@ -405,27 +449,6 @@ export default function SyntheticPanel({
           Generate Track
         </button>
 
-        {/* Render queue — shows each job independently */}
-        {renderJobs.length > 0 && (
-          <div className="space-y-2">
-            {renderJobs.map((job) => (
-              <div key={job.id} className="bg-zinc-800/60 rounded-lg px-3 py-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-300 truncate">{job.label}</span>
-                  <span className="text-[10px] text-zinc-500 font-mono ml-2 shrink-0">
-                    {job.progress < 0.05 ? "queued" : `${Math.round(job.progress * 100)}%`}
-                  </span>
-                </div>
-                <div className="h-1 bg-zinc-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-purple-500 rounded-full transition-all duration-300"
-                    style={{ width: `${job.progress * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Generated tracks */}

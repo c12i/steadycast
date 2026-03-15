@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   SyntheticEngine,
@@ -22,12 +22,36 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
     density: "Medium",
     instrument: "Piano",
     drums: { enabled: true, pattern: "boom-bap", kick: true, snare: true, hihat: true },
+    melody: "flute",
+    reverbAmount: 0.5,
+    warmth: 0.5,
   });
 
-  const engineRef = useRef<SyntheticEngine | null>(null);
+  const engineRef    = useRef<SyntheticEngine | null>(null);
+  const regenTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  const [renderJobs, setRenderJobs] = useState<RenderJob[]>([]);
+  const [renderJobs, setRenderJobs]           = useState<RenderJob[]>([]);
+  const [completedRenders, setCompletedRenders] = useState<UserAsset[]>([]);
+
+  const clearCompletedRender = useCallback((id: string) => {
+    setCompletedRenders((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  // Auto-regenerate 350 ms after any config change while previewing
+  const scheduleRegenerate = useCallback(() => {
+    if (!engineRef.current) return;
+    if (regenTimer.current) clearTimeout(regenTimer.current);
+    regenTimer.current = setTimeout(() => { engineRef.current?.regenerate(); }, 350);
+  }, []);
+
+  // Clear pending timer if preview stops
+  useEffect(() => {
+    if (!previewing && regenTimer.current) {
+      clearTimeout(regenTimer.current);
+      regenTimer.current = null;
+    }
+  }, [previewing]);
   const queueRef   = useRef<Array<() => Promise<void>>>([]);
   const runningRef = useRef(false);
 
@@ -46,12 +70,19 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
       engineRef.current?.updateConfig(partial);
       return next;
     });
-  }, []);
+    scheduleRegenerate();
+  }, [scheduleRegenerate]);
 
-  /** Replace the entire config at once (used by Randomize). */
+  /** Replace the entire config at once (used by Randomize). Stops preview — user hits Play again. */
   const applyConfig = useCallback((newConfig: SynthConfig) => {
+    if (regenTimer.current) { clearTimeout(regenTimer.current); regenTimer.current = null; }
     setConfig(newConfig);
-    engineRef.current?.updateConfig(newConfig);
+    if (engineRef.current) {
+      engineRef.current.stopPreview().finally(() => {
+        engineRef.current = null;
+        setPreviewing(false);
+      });
+    }
   }, []);
 
   // ── Preview engine ────────────────────────────────────────────────────────
@@ -110,6 +141,7 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
         const asset = await invoke<UserAsset>("save_synth_track", { wavB64: b64, name });
         await onAssetsChanged();
         onTrackSaved(asset);
+        setCompletedRenders((prev) => [...prev, asset]);
       } catch (e) {
         console.error("Track generation failed:", e);
       } finally {
@@ -133,6 +165,8 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
     config,
     previewing,
     renderJobs,
+    completedRenders,
+    clearCompletedRender,
     updateConfig,
     applyConfig,
     regenerate,
