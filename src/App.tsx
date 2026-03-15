@@ -8,6 +8,7 @@ import AssetPicker from "./components/AssetPicker";
 import StreamConfig from "./components/StreamConfig";
 import SettingsPanel from "./components/SettingsPanel";
 import { useSynth } from "./hooks/useSynth";
+import { useAmbient } from "./hooks/useAmbient";
 
 import {
   AppSettings,
@@ -68,12 +69,19 @@ export default function App() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Synthesizer ────────────────────────────────────────────────────────────
+  const refreshUserAssets = useCallback(async () => {
+    const ua = await invoke<UserAsset[]>("get_user_assets").catch(() => [] as UserAsset[]);
+    setUserAssets(ua);
+  }, []);
+
   const synth = useSynth({
     onTrackSaved: (asset) => setSelectedMusic((prev) => [...prev, asset]),
-    onAssetsChanged: async () => {
-      const ua = await invoke<UserAsset[]>("get_user_assets").catch(() => [] as UserAsset[]);
-      setUserAssets(ua);
-    },
+    onAssetsChanged: refreshUserAssets,
+  });
+
+  const ambient = useAmbient({
+    onAmbientSaved: (asset) => setSelectedAmbient(asset),
+    onAssetsChanged: refreshUserAssets,
   });
 
   // ── Data loaders ──────────────────────────────────────────────────────────
@@ -234,6 +242,7 @@ export default function App() {
     setStreamError(null);
     setCurrentTrackIndex(0);
     await synth.stopPreview();
+    ambient.stopPreview();
 
     try {
       const playlist = selectedMusic.map((m) => m.local_path!);
@@ -251,7 +260,7 @@ export default function App() {
         },
       });
     } catch (e) { setStreamError(String(e)); }
-  }, [selectedVideo, selectedMusic, selectedAmbient, streamKey, musicVolume, ambientVolume, platform, durationSeconds, synth]);
+  }, [selectedVideo, selectedMusic, selectedAmbient, streamKey, musicVolume, ambientVolume, platform, durationSeconds, synth, ambient]);
 
   const handleStopStream = useCallback(async () => {
     try { await invoke("stop_stream"); setStreamError(null); }
@@ -304,6 +313,11 @@ export default function App() {
             onToggleSynthTrack={handleToggleMusic}
             onRandomizeSynth={synth.applyConfig}
             onRenameSynthTrack={synth.renameTrack}
+            ambientPreviewingType={ambient.previewingType}
+            ambientRenderingType={ambient.renderingType}
+            ambientPreviewError={ambient.previewError}
+            onToggleAmbientPreview={ambient.togglePreview}
+            onUseAmbientPreset={ambient.renderAndSave}
           />
         </div>
 

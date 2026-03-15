@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Preset, RenderJob, UserAsset } from "../types";
 import SyntheticPanel from "./SyntheticPanel";
 import { SynthConfig } from "../lib/SyntheticEngine";
+import { AmbientType, AMBIENT_PRESETS } from "../lib/AmbientEngine";
 
 type Tab = "presets" | "music" | "ambient" | "video";
 
@@ -24,6 +25,13 @@ interface Props {
   onImportPresetUrl: (url: string) => void;
   onUploadAsset: (type: "video" | "music" | "ambient") => void;
   onDeleteUserAsset: (id: string) => void;
+  // Ambient synthesis
+  ambientPreviewingType: AmbientType | null;
+  ambientRenderingType: AmbientType | null;
+  ambientPreviewError: string | null;
+  onToggleAmbientPreview: (type: AmbientType) => void;
+  onUseAmbientPreset: (type: AmbientType) => void;
+  // Synth music
   synthConfig: SynthConfig;
   synthPreviewing: boolean;
   renderJobs: RenderJob[];
@@ -79,6 +87,11 @@ export default function AssetPicker({
   onImportPresetUrl,
   onUploadAsset,
   onDeleteUserAsset,
+  ambientPreviewingType,
+  ambientRenderingType,
+  ambientPreviewError,
+  onToggleAmbientPreview,
+  onUseAmbientPreset,
   synthConfig,
   synthPreviewing,
   renderJobs,
@@ -395,7 +408,7 @@ export default function AssetPicker({
         {/* ── Ambient tab ─────────────────────────────────────────────────── */}
         {activeTab === "ambient" && (
           <>
-            {/* None option */}
+            {/* None */}
             <div
               onClick={() => !isStreaming && onSelectAmbient(null)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${
@@ -406,40 +419,80 @@ export default function AssetPicker({
                   : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
               }`}
             >
-              <div className="w-6 h-6 flex items-center justify-center shrink-0 text-sm">🔇</div>
+              <span className="w-6 h-6 flex items-center justify-center shrink-0 text-sm">🔇</span>
               <span className="flex-1 text-xs font-medium text-zinc-300">None</span>
-              {selectedAmbient === null && (
-                <span className="text-[10px] text-purple-400 font-bold">✓</span>
-              )}
+              {selectedAmbient === null && <span className="text-[10px] text-purple-400 font-bold">✓</span>}
             </div>
 
-            {userAssetsOfType("ambient").map((ua) => {
-              const isSelected = selectedAmbient?.id === ua.id;
-              const isPreviewing = audioPreviewId === ua.id;
+            {/* Error banner */}
+            {ambientPreviewError && (
+              <p className="text-[11px] text-red-400 bg-red-950/40 border border-red-800 rounded px-2.5 py-1.5">
+                {ambientPreviewError}
+              </p>
+            )}
+
+            {/* Built-in presets */}
+            <p className="text-[11px] text-zinc-500 font-medium mt-1">Built-in Sounds</p>
+            {AMBIENT_PRESETS.map((preset) => {
+              const isPreviewing = ambientPreviewingType === preset.id;
+              const isRendering  = ambientRenderingType === preset.id;
               return (
-                <UserAssetRow
-                  key={ua.id}
-                  asset={ua}
-                  isSelected={isSelected}
-                  badge={isSelected ? "✓" : undefined}
-                  isPreviewing={isPreviewing}
-                  isPreviewPlaying={isPreviewing && isAudioPlaying}
-                  previewProgress={isPreviewing ? audioProgress : 0}
-                  isNowPlaying={false}
-                  isStreaming={isStreaming}
-                  onClick={() => onSelectAmbient(ua)}
-                  onPreview={(e) => toggleAudio(e, ua.id, ua.local_path)}
-                  onDelete={() => onDeleteUserAsset(ua.id)}
-                />
+                <div
+                  key={preset.id}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900"
+                >
+                  <button
+                    onClick={() => onToggleAmbientPreview(preset.id)}
+                    disabled={isStreaming}
+                    className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-full flex items-center justify-center text-zinc-300 shrink-0 transition-colors"
+                  >
+                    {isPreviewing ? <PauseIcon /> : <PlayIcon />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-200">{preset.label}</p>
+                    <p className="text-[10px] text-zinc-500">{preset.description}</p>
+                  </div>
+                  <button
+                    onClick={() => !isStreaming && !isRendering && onUseAmbientPreset(preset.id)}
+                    disabled={isStreaming || !!ambientRenderingType}
+                    className="px-2.5 py-1 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded text-white font-medium transition-colors shrink-0"
+                  >
+                    {isRendering ? "…" : "Use"}
+                  </button>
+                </div>
               );
             })}
 
-            {userAssetsOfType("ambient").length === 0 && (
-              <p className="text-xs text-zinc-600 text-center py-6">No ambient sounds yet. Upload an audio file to use as background.</p>
+            {/* Rendered / uploaded ambient files */}
+            {userAssetsOfType("ambient").length > 0 && (
+              <>
+                <p className="text-[11px] text-zinc-500 font-medium mt-2">My Files</p>
+                {userAssetsOfType("ambient").map((ua) => {
+                  const isSelected   = selectedAmbient?.id === ua.id;
+                  const isPreviewing = audioPreviewId === ua.id;
+                  return (
+                    <UserAssetRow
+                      key={ua.id}
+                      asset={ua}
+                      isSelected={isSelected}
+                      badge={isSelected ? "✓" : undefined}
+                      isPreviewing={isPreviewing}
+                      isPreviewPlaying={isPreviewing && isAudioPlaying}
+                      previewProgress={isPreviewing ? audioProgress : 0}
+                      isNowPlaying={false}
+                      isStreaming={isStreaming}
+                      onClick={() => onSelectAmbient(ua)}
+                      onPreview={(e) => toggleAudio(e, ua.id, ua.local_path)}
+                      onDelete={() => onDeleteUserAsset(ua.id)}
+                    />
+                  );
+                })}
+              </>
             )}
+
             <button
               onClick={() => onUploadAsset("ambient")}
-              className="mt-1 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+              className="mt-2 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
             >
               + Upload Ambient
             </button>

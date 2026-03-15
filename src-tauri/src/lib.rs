@@ -50,6 +50,7 @@ pub fn run() {
             user_assets::delete_user_asset,
             user_assets::rename_user_asset,
             user_assets::save_synth_track,
+            user_assets::save_ambient_file,
             // Presets
             presets::get_presets,
             presets::save_preset,
