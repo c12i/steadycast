@@ -11,10 +11,7 @@ import { useSynth } from "./hooks/useSynth";
 
 import {
   AppSettings,
-  AudioMode,
   CacheStats,
-  CatalogAsset,
-  LibraryResponse,
   Platform,
   Preferences,
   Preset,
@@ -25,7 +22,6 @@ import {
 
 const POLL_INTERVAL_MS = 2000;
 
-const EMPTY_LIBRARY: LibraryResponse = { version: 0, music: [], ambient: [], video: [] };
 const DEFAULT_SETTINGS: AppSettings = {
   video_bitrate: "4500k",
   audio_bitrate: "192k",
@@ -45,17 +41,15 @@ const DEFAULT_CACHE: CacheStats = {
 
 export default function App() {
   // ── Data ───────────────────────────────────────────────────────────────────
-  const [library, setLibrary]           = useState<LibraryResponse>(EMPTY_LIBRARY);
-  const [libraryLoading, setLibraryLoading] = useState(false);
   const [presets, setPresets]           = useState<Preset[]>([]);
   const [userAssets, setUserAssets]     = useState<UserAsset[]>([]);
   const [settings, setSettings]         = useState<AppSettings>(DEFAULT_SETTINGS);
   const [cacheStats, setCacheStats]     = useState<CacheStats>(DEFAULT_CACHE);
 
   // ── Selection ──────────────────────────────────────────────────────────────
-  const [selectedVideo, setSelectedVideo]   = useState<CatalogAsset | UserAsset | null>(null);
-  const [selectedMusic, setSelectedMusic]   = useState<(CatalogAsset | UserAsset)[]>([]);
-  const [selectedAmbient, setSelectedAmbient] = useState<CatalogAsset | UserAsset | null>(null);
+  const [selectedVideo, setSelectedVideo]   = useState<UserAsset | null>(null);
+  const [selectedMusic, setSelectedMusic]   = useState<UserAsset[]>([]);
+  const [selectedAmbient, setSelectedAmbient] = useState<UserAsset | null>(null);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
 
   // ── Stream ─────────────────────────────────────────────────────────────────
@@ -69,7 +63,6 @@ export default function App() {
   const [durationSeconds, setDurationSeconds] = useState<number | undefined>(undefined);
 
   // ── UI ─────────────────────────────────────────────────────────────────────
-  const [audioMode, setAudioMode]     = useState<AudioMode>("library");
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -84,14 +77,6 @@ export default function App() {
   });
 
   // ── Data loaders ──────────────────────────────────────────────────────────
-
-  const loadLibrary = useCallback(async () => {
-    setLibraryLoading(true);
-    try {
-      setLibrary(await invoke<LibraryResponse>("get_library"));
-    } catch (_) {}
-    finally { setLibraryLoading(false); }
-  }, []);
 
   const loadPresets      = useCallback(async () => {
     try { setPresets(await invoke<Preset[]>("get_presets")); } catch (_) {}
@@ -108,7 +93,6 @@ export default function App() {
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    loadLibrary();
     loadPresets();
     loadUserAssets();
     loadCacheStats();
@@ -133,7 +117,7 @@ export default function App() {
     invoke<string>("get_stream_key", { platform: "twitch" }).then((key) => {
       if (key) setStreamKeys((p) => ({ ...p, twitch: key }));
     }).catch(() => {});
-  }, [loadLibrary, loadPresets, loadUserAssets, loadCacheStats]);
+  }, [loadPresets, loadUserAssets, loadCacheStats]);
 
   // ── Stream status polling & events ────────────────────────────────────────
 
@@ -158,13 +142,7 @@ export default function App() {
 
   // ── Asset handlers ────────────────────────────────────────────────────────
 
-  const handleDownloadAsset = useCallback(async (id: string): Promise<string> => {
-    const path = await invoke<string>("download_asset", { id });
-    await loadLibrary();
-    return path;
-  }, [loadLibrary]);
-
-  const handleToggleMusic = useCallback((asset: CatalogAsset | UserAsset) => {
+  const handleToggleMusic = useCallback((asset: UserAsset) => {
     setSelectedMusic((prev) => {
       const idx = prev.findIndex((m) => m.id === asset.id);
       return idx === -1 ? [...prev, asset] : prev.filter((_, i) => i !== idx);
@@ -188,19 +166,18 @@ export default function App() {
       await invoke("delete_user_asset", { id });
       await loadUserAssets();
       setSelectedMusic((prev) => prev.filter((m) => m.id !== id));
-      setSelectedVideo((prev) => (prev?.id === id ? null : prev));
-      setSelectedAmbient((prev) => (prev?.id === id ? null : prev));
+      setSelectedVideo((prev) => prev?.id === id ? null : prev);
+      setSelectedAmbient((prev) => prev?.id === id ? null : prev);
     } catch (_) {}
   }, [loadUserAssets]);
 
   // ── Preset handlers ───────────────────────────────────────────────────────
 
   const handleApplyPreset = useCallback((preset: Preset) => {
-    const all = [...library.video, ...library.music, ...library.ambient, ...userAssets];
-    setSelectedVideo(preset.video_id ? (all.find((a) => a.id === preset.video_id) as CatalogAsset | UserAsset ?? null) : null);
-    setSelectedMusic(preset.music_ids.map((id) => all.find((a) => a.id === id)).filter((a): a is CatalogAsset | UserAsset => !!a));
-    setSelectedAmbient(preset.ambient_id ? (all.find((a) => a.id === preset.ambient_id) as CatalogAsset | UserAsset ?? null) : null);
-  }, [library, userAssets]);
+    setSelectedVideo(preset.video_id ? (userAssets.find((a) => a.id === preset.video_id) ?? null) : null);
+    setSelectedMusic(preset.music_ids.map((id) => userAssets.find((a) => a.id === id)).filter((a): a is UserAsset => !!a));
+    setSelectedAmbient(preset.ambient_id ? (userAssets.find((a) => a.id === preset.ambient_id) ?? null) : null);
+  }, [userAssets]);
 
   const handleSavePreset = useCallback(async (name: string) => {
     try {
@@ -214,8 +191,8 @@ export default function App() {
   }, [loadPresets]);
 
   const handleImportPresetUrl = useCallback(async (url: string) => {
-    try { await invoke("import_preset_from_url", { url }); await Promise.all([loadPresets(), loadLibrary()]); } catch (_) {}
-  }, [loadPresets, loadLibrary]);
+    try { await invoke("import_preset_from_url", { url }); await loadPresets(); } catch (_) {}
+  }, [loadPresets]);
 
   // ── Settings & stream key handlers ────────────────────────────────────────
 
@@ -231,9 +208,9 @@ export default function App() {
   const handleClearCache = useCallback(async (type?: string) => {
     try {
       await invoke("clear_cache", { assetType: type ?? null });
-      await Promise.all([loadCacheStats(), loadLibrary()]);
+      await loadCacheStats();
     } catch (_) {}
-  }, [loadCacheStats, loadLibrary]);
+  }, [loadCacheStats]);
 
   const handleSaveStreamKey = useCallback(async (p: "youtube" | "twitch", key: string) => {
     try {
@@ -248,7 +225,7 @@ export default function App() {
   const handleStartStream = useCallback(async () => {
     if (!selectedVideo?.local_path) { setStreamError("Select a downloaded video loop first."); return; }
     if (selectedMusic.length === 0) {
-      setStreamError(audioMode === "synthetic" ? "Generate some tracks first — use the Generate button in Synthesizer." : "Select at least one music track.");
+      setStreamError("Select or generate at least one music track.");
       return;
     }
     if (selectedMusic.some((m) => !m.local_path)) { setStreamError("Some music tracks are not downloaded yet."); return; }
@@ -274,7 +251,7 @@ export default function App() {
         },
       });
     } catch (e) { setStreamError(String(e)); }
-  }, [selectedVideo, selectedMusic, selectedAmbient, streamKey, musicVolume, ambientVolume, platform, durationSeconds, audioMode, synth]);
+  }, [selectedVideo, selectedMusic, selectedAmbient, streamKey, musicVolume, ambientVolume, platform, durationSeconds, synth]);
 
   const handleStopStream = useCallback(async () => {
     try { await invoke("stop_stream"); setStreamError(null); }
@@ -301,8 +278,6 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-hidden border-r border-zinc-800 flex flex-col">
           <AssetPicker
-            library={library}
-            libraryLoading={libraryLoading}
             presets={presets}
             userAssets={userAssets}
             selectedVideo={selectedVideo}
@@ -319,12 +294,9 @@ export default function App() {
             onImportPresetUrl={handleImportPresetUrl}
             onUploadAsset={handleUploadAsset}
             onDeleteUserAsset={handleDeleteUserAsset}
-            onDownloadAsset={handleDownloadAsset}
-            audioMode={audioMode}
             synthConfig={synth.config}
             synthPreviewing={synth.previewing}
             renderJobs={synth.renderJobs}
-            onAudioModeChange={setAudioMode}
             onSynthConfigChange={synth.updateConfig}
             onSynthRegenerate={synth.regenerate}
             onToggleSynthPreview={synth.togglePreview}

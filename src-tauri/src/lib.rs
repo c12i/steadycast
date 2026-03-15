@@ -2,20 +2,16 @@
 //!
 //! Module responsibilities:
 //!   stream      — FFmpeg process lifecycle, playlist cycling, RTMP output
-//!   library     — asset catalog (fetch, download, cache)
 //!   user_assets — user-uploaded files and synthesizer-generated tracks
 //!   presets     — save/load/share stream configurations
 //!   settings    — quality settings, playback preferences, cache management
 //!   keys        — stream key storage (YouTube / Twitch)
 //!   db          — SQLite connection and schema bootstrap
 //!   windows     — secondary Tauri windows (preview, logs)
-//!   assets      — legacy manifest downloader (kept for back-compat)
 //!   license     — license validation stub
 
-mod assets;
 mod db;
 mod keys;
-mod library;
 mod license;
 mod presets;
 mod settings;
@@ -48,10 +44,6 @@ pub fn run() {
             stream::get_ffmpeg_logs,
             stream::clear_ffmpeg_logs,
             stream::get_current_stream_info,
-            // Library
-            library::get_library,
-            library::download_asset,
-            library::delete_cached_asset,
             // User assets
             user_assets::add_user_asset,
             user_assets::get_user_assets,
@@ -78,8 +70,6 @@ pub fn run() {
             // Windows
             windows::open_preview_window,
             windows::open_logs_window,
-            // Legacy manifest import
-            assets::download_assets,
             // License
             license::validate_license,
         ])
