@@ -117,7 +117,8 @@ pub async fn start_stream(
     state.logs.lock().unwrap().clear();
 
     let mut initial_config = config.clone();
-    initial_config.music_path = playlist.first().cloned();
+    initial_config.music_path     = playlist.first().cloned();
+    initial_config.music_playlist = playlist.clone(); // ensure full playlist is in base_config
     *state.base_config.lock().unwrap() = Some(initial_config.clone());
 
     let quality = app
@@ -233,58 +234,116 @@ fn rtmp_url(platform: &str, key: &str) -> String {
     }
 }
 
+/// Duration of the crossfade between playlist tracks, in seconds.
+const CROSSFADE_SECS: f32 = 3.0;
+
+/// Builds the `filter_complex` fragments for the music playlist and returns
+/// `(filter_parts, final_output_label)`.
+///
+/// - 1 track  → simple volume filter; the input is already `-stream_loop -1`.
+/// - N tracks → chain of `acrossfade` filters followed by a volume node.
+fn music_filter(input_base: usize, n: usize, volume: f32) -> (Vec<String>, String) {
+    debug_assert!(n > 0);
+    if n == 1 {
+        let out = "[amusic]".to_string();
+        return (vec![format!("[{input_base}:a]volume={volume}{out}")], out);
+    }
+
+    let mut parts = Vec::new();
+    let mut prev  = format!("[{input_base}:a]");
+
+    for i in 1..n {
+        let next  = format!("[{}:a]", input_base + i);
+        let label = if i < n - 1 { format!("[xcf{i}]") } else { "[xcf_last]".to_string() };
+        parts.push(format!("{prev}{next}acrossfade=d={CROSSFADE_SECS}:c1=tri:c2=tri{label}"));
+        prev = label;
+    }
+
+    let out = "[amusic]".to_string();
+    parts.push(format!("{prev}volume={volume}{out}"));
+    (parts, out)
+}
+
 fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
-    // Input 0: video/image (looped)
+    // ── Input 0: video/image ──────────────────────────────────────────────────
     if is_image(&config.video_path) {
         args.extend(["-loop", "1", "-i", &config.video_path].map(String::from));
     } else {
         args.extend(["-re", "-stream_loop", "-1", "-i", &config.video_path].map(String::from));
     }
 
-    let has_music   = config.music_path.is_some();
-    let has_ambient = config.ambient_path.is_some();
+    // ── Music inputs ──────────────────────────────────────────────────────────
+    let playlist     = &config.music_playlist;
+    let music_n      = playlist.len();
+    let has_music    = music_n > 0;
+    let music_base   = 1_usize; // first music FFmpeg input index
 
-    // Track which FFmpeg input index each audio source gets
-    let mut next_idx: usize = 1;
-    let music_idx = if has_music {
-        let i = next_idx; next_idx += 1;
-        args.extend(["-i", config.music_path.as_deref().unwrap()].map(String::from));
-        Some(i)
-    } else { None };
-    let ambient_idx = if has_ambient {
-        let i = next_idx;
-        args.extend(["-stream_loop", "-1", "-i", config.ambient_path.as_deref().unwrap()].map(String::from));
-        Some(i)
-    } else { None };
-
-    // Build audio filter + output mapping
-    match (music_idx, ambient_idx) {
-        (Some(mi), Some(ai)) => {
-            args.extend([
-                "-filter_complex".into(),
-                format!("[{mi}]volume={mv}[a1];[{ai}]volume={av}[a2];[a1][a2]amix=inputs=2:duration=longest[aout]",
-                    mv = config.music_volume, av = config.ambient_volume),
-            ]);
-            args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
-        }
-        (Some(mi), None) => {
-            args.extend(["-filter_complex".into(), format!("[{mi}]volume={}[aout]", config.music_volume)]);
-            args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
-        }
-        (None, Some(ai)) => {
-            args.extend(["-filter_complex".into(), format!("[{ai}]volume={}[aout]", config.ambient_volume)]);
-            args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
-        }
-        (None, None) => {
-            // No audio — generate silence so the stream has a valid audio track
-            args.extend(["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"].map(String::from));
-            args.extend(["-map", "0:v", "-map", "1:a"].map(String::from));
+    if has_music {
+        if music_n == 1 {
+            // Single track — loop it indefinitely within FFmpeg.
+            args.extend(["-stream_loop", "-1", "-i", &playlist[0]].map(String::from));
+        } else {
+            // Multiple tracks — each plays once; acrossfade handles blending.
+            for track in playlist {
+                args.extend(["-i", track].map(String::from));
+            }
         }
     }
 
-    // Video encoding — YouTube requires yuv420p and 2-second keyframe intervals
+    // ── Ambient input ─────────────────────────────────────────────────────────
+    let ambient_idx  = music_base + if has_music { music_n } else { 0 };
+    let has_ambient  = config.ambient_path.is_some();
+
+    if has_ambient {
+        args.extend([
+            "-stream_loop", "-1",
+            "-i", config.ambient_path.as_deref().unwrap(),
+        ].map(String::from));
+    }
+
+    // ── Filter complex + output mapping ──────────────────────────────────────
+    if !has_music && !has_ambient {
+        // No audio — generate silence so the stream has a valid audio track.
+        args.extend(["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"].map(String::from));
+        args.extend(["-map", "0:v", "-map", "1:a"].map(String::from));
+    } else {
+        let mut filter_parts: Vec<String> = Vec::new();
+
+        let music_out = if has_music {
+            let (parts, label) = music_filter(music_base, music_n, config.music_volume);
+            filter_parts.extend(parts);
+            Some(label)
+        } else {
+            None
+        };
+
+        // Combine music + ambient into the final [aout] label.
+        let final_label: String = match (music_out.as_deref(), has_ambient) {
+            (Some(ml), true) => {
+                let av = config.ambient_volume;
+                let ai = ambient_idx;
+                filter_parts.push(format!("[{ai}:a]volume={av}[aambient]"));
+                // duration=first: the mix ends when music ends, so the playlist
+                // restarts cleanly even when ambient is present.
+                filter_parts.push(format!("{ml}[aambient]amix=inputs=2:duration=first[aout]"));
+                "[aout]".into()
+            }
+            (Some(ml), false) => ml.to_string(),
+            (None, true) => {
+                filter_parts.push(format!("[{ambient_idx}:a]volume={}[aout]", config.ambient_volume));
+                "[aout]".into()
+            }
+            (None, false) => unreachable!(),
+        };
+
+        args.extend(["-filter_complex".into(), filter_parts.join(";")]);
+        args.push("-map".into()); args.push("0:v".into());
+        args.push("-map".into()); args.push(final_label);
+    }
+
+    // ── Video encoding ────────────────────────────────────────────────────────
     let fps     = quality.frame_rate.to_string();
     let gop     = (quality.frame_rate * 2).to_string();
     let bufsize = format!("{}k", quality.video_bitrate.trim_end_matches('k').parse::<u32>().unwrap_or(2500) * 2);
@@ -292,7 +351,7 @@ fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> 
     args.extend(["-b:v", &quality.video_bitrate, "-maxrate", &quality.video_bitrate, "-bufsize", &bufsize].map(String::from));
     args.extend(["-pix_fmt", "yuv420p", "-r", &fps, "-g", &gop].map(String::from));
 
-    // Audio encoding — 44100 Hz required by most RTMP ingest servers
+    // ── Audio encoding ────────────────────────────────────────────────────────
     args.extend(["-c:a", "aac", "-b:a", &quality.audio_bitrate, "-ar", "44100"].map(String::from));
 
     if let Some(dur) = config.duration_seconds {
@@ -370,9 +429,8 @@ fn spawn_monitor(
                 return;
             }
 
-            // Clean exit: advance the playlist (or stop if no playlist).
-            let (next_index, next_music_path) = {
-                let mut idx  = track_index_arc.lock().unwrap();
+            // Clean exit: the full playlist finished — restart from the top.
+            {
                 let playlist = playlist_arc.lock().unwrap();
                 if playlist.is_empty() {
                     // Video + ambient-only stream — duration elapsed, clean stop.
@@ -380,9 +438,9 @@ fn spawn_monitor(
                     stop_caffeinate(&caffeinate_arc);
                     return;
                 }
-                *idx = (*idx + 1) % playlist.len();
-                (*idx, playlist[*idx].clone())
-            };
+                // Reset track index so the UI reflects the restart.
+                *track_index_arc.lock().unwrap() = 0;
+            }
 
             if *is_stopping_arc.lock().unwrap() {
                 *time_arc.lock().unwrap()       = None;
@@ -391,13 +449,10 @@ fn spawn_monitor(
                 return;
             }
 
-            let next_config = {
-                let mut cfg = base_config_arc.lock().unwrap()
-                    .clone()
-                    .expect("base_config missing in monitor");
-                cfg.music_path = Some(next_music_path.clone());
-                cfg
-            };
+            // Restart FFmpeg with the full playlist (same base_config).
+            let next_config = base_config_arc.lock().unwrap()
+                .clone()
+                .expect("base_config missing in monitor");
 
             match app.shell()
                 .sidecar("ffmpeg")
@@ -407,13 +462,14 @@ fn spawn_monitor(
                 Ok((new_rx, new_child)) => {
                     *child_arc.lock().unwrap() = Some(new_child);
                     rx = new_rx;
+                    let first_path = next_config.music_playlist.first().cloned().unwrap_or_default();
                     let _ = app.emit("track-changed", TrackChangedPayload {
-                        track_index: next_index,
-                        music_path:  next_music_path,
+                        track_index: 0,
+                        music_path:  first_path,
                     });
                 }
                 Err(e) => {
-                    log::error!("Failed to respawn FFmpeg for next track: {e}");
+                    log::error!("Failed to respawn FFmpeg for playlist restart: {e}");
                     *time_arc.lock().unwrap() = None;
                     stop_caffeinate(&caffeinate_arc);
                     return;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AppSettings, CacheStats, UserAsset } from "../types";
 
 interface Props {
@@ -36,10 +36,38 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Tooltip({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <div className="relative inline-flex items-center" ref={ref}>
+      <button
+        type="button"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        className="w-3.5 h-3.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-200 flex items-center justify-center text-[9px] font-bold leading-none transition-colors select-none"
+        aria-label="More info"
+      >
+        ?
+      </button>
+      {visible && (
+        <div className="absolute left-5 top-1/2 -translate-y-1/2 z-50 w-56 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl pointer-events-none">
+          <p className="text-[11px] text-zinc-300 leading-relaxed">{text}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, tooltip, children }: { label: string; tooltip?: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <label className="text-xs text-zinc-400 shrink-0">{label}</label>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <label className="text-xs text-zinc-400">{label}</label>
+        {tooltip && <Tooltip text={tooltip} />}
+      </div>
       {children}
     </div>
   );
@@ -110,7 +138,10 @@ export default function SettingsPanel({
           <section>
             <SectionHeader>Stream Quality</SectionHeader>
             <div className="flex flex-col gap-3">
-              <Row label="Video Bitrate">
+              <Row
+                label="Video Bitrate"
+                tooltip="Controls video quality and file size. 4500k is recommended for 1080p on YouTube. Higher values look better but require more upload bandwidth."
+              >
                 <select
                   value={draft.video_bitrate}
                   onChange={(e) => set("video_bitrate", e.target.value)}
@@ -121,7 +152,10 @@ export default function SettingsPanel({
                   ))}
                 </select>
               </Row>
-              <Row label="Audio Bitrate">
+              <Row
+                label="Audio Bitrate"
+                tooltip="Quality of the music and ambient audio in the stream. 192k is transparent for most listeners. Only increase if you notice audible compression artifacts."
+              >
                 <select
                   value={draft.audio_bitrate}
                   onChange={(e) => set("audio_bitrate", e.target.value)}
@@ -132,7 +166,10 @@ export default function SettingsPanel({
                   ))}
                 </select>
               </Row>
-              <Row label="Frame Rate">
+              <Row
+                label="Frame Rate"
+                tooltip="Frames per second sent to the streaming platform. 30 fps is the standard for lofi streams. 60 fps looks smoother but roughly doubles CPU and bandwidth usage."
+              >
                 <select
                   value={draft.frame_rate}
                   onChange={(e) => set("frame_rate", parseInt(e.target.value))}
@@ -143,7 +180,10 @@ export default function SettingsPanel({
                   ))}
                 </select>
               </Row>
-              <Row label="Encoding Preset">
+              <Row
+                label="Encoding Preset"
+                tooltip="Speed vs. quality trade-off for the H.264 encoder. Faster presets use less CPU but produce larger files at the same bitrate. 'veryfast' is a good default for live streaming."
+              >
                 <select
                   value={draft.encoding_preset}
                   onChange={(e) => set("encoding_preset", e.target.value)}

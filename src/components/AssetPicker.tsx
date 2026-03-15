@@ -196,16 +196,19 @@ export default function AssetPicker({
 
   const popOutPresetPreview = useCallback(async (p: Preset) => {
     const videoAsset   = p.video_id   ? userAssets.find((a) => a.id === p.video_id)   : null;
-    const musicAsset   = p.music_ids.length > 0 ? userAssets.find((a) => a.id === p.music_ids[0]) : null;
     const ambientAsset = p.ambient_id ? userAssets.find((a) => a.id === p.ambient_id) : null;
     if (!videoAsset?.local_path) return;
+    const musicAssets = p.music_ids
+      .map((id) => userAssets.find((a) => a.id === id))
+      .filter((a): a is typeof userAssets[0] => !!a?.local_path);
     try {
       await invoke("set_preview_config", {
         config: {
-          video_path:    videoAsset.local_path,
-          music_path:    musicAsset?.local_path ?? null,
-          ambient_path:  ambientAsset?.local_path ?? null,
-          music_volume:  0.8,
+          video_path:     videoAsset.local_path,
+          music_path:     musicAssets[0]?.local_path ?? null,
+          music_playlist: musicAssets.map((a) => a.local_path!),
+          ambient_path:   ambientAsset?.local_path ?? null,
+          music_volume:   0.8,
           ambient_volume: 0.5,
         },
       });

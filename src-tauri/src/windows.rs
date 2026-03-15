@@ -7,10 +7,12 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 /// Transient selection passed from the main window to the preview window.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct PreviewConfig {
-    pub video_path:    Option<String>,
-    pub music_path:    Option<String>,
-    pub ambient_path:  Option<String>,
-    pub music_volume:  f32,
+    pub video_path:     Option<String>,
+    pub music_path:     Option<String>,
+    /// Full ordered playlist — used by the preview window to cycle tracks.
+    pub music_playlist: Vec<String>,
+    pub ambient_path:   Option<String>,
+    pub music_volume:   f32,
     pub ambient_volume: f32,
 }
 

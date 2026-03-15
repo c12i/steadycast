@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { Platform, UserAsset } from "../types";
+
+/** Must match CROSSFADE_SECS in stream.rs */
+const XFADE_SECS = 3;
+const XFADE_STEPS = 40;
 
 interface Props {
   platform: Platform;
@@ -93,84 +97,166 @@ export default function StreamConfig({
   const durationHours = durationSeconds ? Math.floor(durationSeconds / 3600) : "";
   const durationMins  = durationSeconds ? Math.floor((durationSeconds % 3600) / 60) : "";
 
-  const [selectionOpen, setSelectionOpen]     = useState(false);
-  const [previewing, setPreviewing]           = useState(false);
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [previewing, setPreviewing]       = useState(false);
   const [previewTrackIdx, setPreviewTrackIdx] = useState(0);
-  const [clearConfirm, setClearConfirm]       = useState(false);
+  const [clearConfirm, setClearConfirm]   = useState(false);
 
-  const musicAudioRef     = useRef<HTMLAudioElement | null>(null);
-  const ambientAudioRef   = useRef<HTMLAudioElement | null>(null);
-  const videoRef          = useRef<HTMLVideoElement | null>(null);
+  // ── Audio elements ─────────────────────────────────────────────────────────
+  // Two slots for crossfading; ambient and video are separate.
+  const audA          = useRef<HTMLAudioElement | null>(null);
+  const audB          = useRef<HTMLAudioElement | null>(null);
+  const activeSlot    = useRef<"a" | "b">("a");
+  const ambientAudRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef      = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const popOutPreview = async () => {
-    if (!selectedVideo?.local_path) return;
-    const currentTrack = selectedMusic[previewTrackIdx] ?? selectedMusic[0] ?? null;
-    stopPreview();
-    try {
-      await invoke("set_preview_config", {
-        config: {
-          video_path:    selectedVideo.local_path,
-          music_path:    currentTrack?.local_path ?? null,
-          ambient_path:  selectedAmbient?.local_path ?? null,
-          music_volume:  musicVolume,
-          ambient_volume: ambientVolume,
-        },
-      });
-      await invoke("open_preview_window");
-    } catch (_) {}
-  };
+  // Mutable refs so crossfade timer never captures stale prop values
+  const trackIdxRef      = useRef(0);
+  const xfadingRef       = useRef(false);
+  const xfadeTimer       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const selectedMusicRef = useRef(selectedMusic);
+  const musicVolRef      = useRef(musicVolume);
 
-  // Keep audio volumes in sync with sliders while previewing
+  useEffect(() => { selectedMusicRef.current = selectedMusic; }, [selectedMusic]);
+  useEffect(() => { musicVolRef.current = musicVolume; }, [musicVolume]);
+
+  // Initialise persistent audio elements once
   useEffect(() => {
-    if (musicAudioRef.current)   musicAudioRef.current.volume   = musicVolume;
-    if (ambientAudioRef.current) ambientAudioRef.current.volume = ambientVolume;
-  }, [musicVolume, ambientVolume]);
+    audA.current = new Audio();
+    audB.current = new Audio();
+    return () => {
+      audA.current?.pause();
+      audB.current?.pause();
+    };
+  }, []);
+
+  // Keep ambient volume in sync while previewing
+  useEffect(() => {
+    if (ambientAudRef.current) ambientAudRef.current.volume = ambientVolume;
+  }, [ambientVolume]);
+
+  // Sync music volume to whichever slot is active (when not mid-crossfade)
+  useEffect(() => {
+    if (xfadingRef.current) return;
+    const aud = activeSlot.current === "a" ? audA.current : audB.current;
+    if (aud) aud.volume = musicVolume;
+  }, [musicVolume]);
+
+  // ── Crossfade logic ────────────────────────────────────────────────────────
+
+  const crossfadeToNext = useCallback(() => {
+    if (xfadingRef.current) return;
+    const music = selectedMusicRef.current;
+    if (music.length <= 1) return; // single track loops via audio.loop
+
+    xfadingRef.current = true;
+    const nextIdx = (trackIdxRef.current + 1) % music.length;
+
+    const outSlot = activeSlot.current;
+    const inSlot: "a" | "b" = outSlot === "a" ? "b" : "a";
+    const outAud = outSlot === "a" ? audA.current : audB.current;
+    const inAud  = inSlot  === "a" ? audA.current : audB.current;
+    if (!outAud || !inAud) { xfadingRef.current = false; return; }
+
+    const nextTrack = music[nextIdx];
+    if (!nextTrack?.local_path) { xfadingRef.current = false; return; }
+
+    inAud.src    = convertFileSrc(nextTrack.local_path);
+    inAud.volume = 0;
+    inAud.play().catch(() => {});
+
+    activeSlot.current = inSlot;
+    trackIdxRef.current = nextIdx;
+    setPreviewTrackIdx(nextIdx);
+
+    let step = 0;
+    const stepMs = (XFADE_SECS * 1000) / XFADE_STEPS;
+    if (xfadeTimer.current) clearInterval(xfadeTimer.current);
+    xfadeTimer.current = setInterval(() => {
+      step++;
+      const t = Math.min(step / XFADE_STEPS, 1);
+      const vol = musicVolRef.current;
+      outAud.volume = (1 - t) * vol;
+      inAud.volume  = t * vol;
+      if (step >= XFADE_STEPS) {
+        clearInterval(xfadeTimer.current!);
+        xfadeTimer.current = null;
+        outAud.pause();
+        outAud.src    = "";
+        outAud.volume = vol;
+        xfadingRef.current = false;
+      }
+    }, stepMs);
+  }, []);
+
+  // Attach timeupdate / ended listeners to both audio elements
+  useEffect(() => {
+    const handleTimeUpdate = (aud: HTMLAudioElement) => () => {
+      const isActive =
+        (activeSlot.current === "a" && aud === audA.current) ||
+        (activeSlot.current === "b" && aud === audB.current);
+      if (!isActive || xfadingRef.current) return;
+      if (!isFinite(aud.duration) || aud.duration <= 0) return;
+      if (selectedMusicRef.current.length <= 1) return;
+      const remaining = aud.duration - aud.currentTime;
+      if (remaining > 0 && remaining <= XFADE_SECS) crossfadeToNext();
+    };
+    const handleEnded = () => { if (!xfadingRef.current) crossfadeToNext(); };
+
+    const a = audA.current;
+    const b = audB.current;
+    if (!a || !b) return;
+
+    const tuA = handleTimeUpdate(a);
+    const tuB = handleTimeUpdate(b);
+    a.addEventListener("timeupdate", tuA);
+    a.addEventListener("ended", handleEnded);
+    b.addEventListener("timeupdate", tuB);
+    b.addEventListener("ended", handleEnded);
+    return () => {
+      a.removeEventListener("timeupdate", tuA);
+      a.removeEventListener("ended", handleEnded);
+      b.removeEventListener("timeupdate", tuB);
+      b.removeEventListener("ended", handleEnded);
+    };
+  }, [crossfadeToNext]);
 
   // Stop preview when stream starts
   useEffect(() => {
-    if (isStreaming) stopPreview();
+    if (isStreaming) stopPreview(); // eslint-disable-line react-hooks/exhaustive-deps
   }, [isStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Advance to next track when current one ends
-  useEffect(() => {
-    const audio = musicAudioRef.current;
-    if (!audio || !previewing) return;
-    const onEnded = () => {
-      const next = (previewTrackIdx + 1) % selectedMusic.length;
-      setPreviewTrackIdx(next);
-      const nextTrack = selectedMusic[next];
-      if (nextTrack?.local_path) {
-        audio.src = convertFileSrc(nextTrack.local_path);
-        audio.play().catch(() => {});
-      }
-    };
-    audio.addEventListener("ended", onEnded);
-    return () => audio.removeEventListener("ended", onEnded);
-  }, [previewing, previewTrackIdx, selectedMusic]);
+  // ── Preview start / stop ───────────────────────────────────────────────────
 
   function startPreview() {
     if (!selectedVideo?.local_path) return;
-
-    // Open the selection panel so the video is visible
     setSelectionOpen(true);
 
-    // Music (optional)
-    const track = selectedMusic[previewTrackIdx] ?? selectedMusic[0];
+    // Reset crossfade state
+    if (xfadeTimer.current) { clearInterval(xfadeTimer.current); xfadeTimer.current = null; }
+    xfadingRef.current  = false;
+    trackIdxRef.current = 0;
+    activeSlot.current  = "a";
+    setPreviewTrackIdx(0);
+
+    // Load first track into slot A
+    const track = selectedMusic[0];
+    const a = audA.current!;
     if (track?.local_path) {
-      const mAudio = new Audio(convertFileSrc(track.local_path));
-      mAudio.volume = musicVolume;
-      mAudio.play().catch(() => {});
-      musicAudioRef.current = mAudio;
+      a.src    = convertFileSrc(track.local_path);
+      a.volume = musicVolume;
+      a.loop   = selectedMusic.length === 1;
+      a.play().catch(() => {});
     }
 
-    // Ambient (optional)
+    // Ambient
     if (selectedAmbient?.local_path) {
-      const aAudio = new Audio(convertFileSrc(selectedAmbient.local_path));
-      aAudio.loop   = true;
-      aAudio.volume = ambientVolume;
-      aAudio.play().catch(() => {});
-      ambientAudioRef.current = aAudio;
+      const amb  = new Audio(convertFileSrc(selectedAmbient.local_path));
+      amb.loop   = true;
+      amb.volume = ambientVolume;
+      amb.play().catch(() => {});
+      ambientAudRef.current = amb;
     }
 
     if (!isImagePath(selectedVideo.local_path)) {
@@ -180,24 +266,45 @@ export default function StreamConfig({
   }
 
   function stopPreview() {
-    if (musicAudioRef.current) {
-      musicAudioRef.current.pause();
-      musicAudioRef.current.src = "";
-      musicAudioRef.current = null;
+    if (xfadeTimer.current) { clearInterval(xfadeTimer.current); xfadeTimer.current = null; }
+    xfadingRef.current = false;
+
+    [audA.current, audB.current].forEach((a) => {
+      if (!a) return;
+      a.pause(); a.src = ""; a.loop = false; a.volume = 1;
+    });
+    if (ambientAudRef.current) {
+      ambientAudRef.current.pause();
+      ambientAudRef.current.src = "";
+      ambientAudRef.current = null;
     }
-    if (ambientAudioRef.current) {
-      ambientAudioRef.current.pause();
-      ambientAudioRef.current.src = "";
-      ambientAudioRef.current = null;
-    }
-    if (!isImagePath(selectedVideo?.local_path)) {
-      videoRef.current?.pause();
-    }
+    if (!isImagePath(selectedVideo?.local_path)) videoRef.current?.pause();
     setPreviewing(false);
     setPreviewTrackIdx(0);
+    trackIdxRef.current = 0;
   }
 
   const togglePreview = () => (previewing ? stopPreview() : startPreview());
+
+  // ── Pop-out preview ────────────────────────────────────────────────────────
+
+  const popOutPreview = async () => {
+    if (!selectedVideo?.local_path) return;
+    stopPreview();
+    try {
+      await invoke("set_preview_config", {
+        config: {
+          video_path:     selectedVideo.local_path,
+          music_path:     selectedMusic[0]?.local_path ?? null,
+          music_playlist: selectedMusic.map((m) => m.local_path!).filter(Boolean),
+          ambient_path:   selectedAmbient?.local_path ?? null,
+          music_volume:   musicVolume,
+          ambient_volume: ambientVolume,
+        },
+      });
+      await invoke("open_preview_window");
+    } catch (_) {}
+  };
 
   const handleDurationChange = (hours: string, mins: string) => {
     const h = parseInt(hours) || 0;
@@ -224,7 +331,6 @@ export default function StreamConfig({
         >
           <span className="text-xs font-medium text-zinc-300">Selection</span>
           <div className="flex items-center gap-2">
-            {/* Compact status badges */}
             <span className={`text-[10px] ${selectedVideo ? "text-blue-400" : "text-zinc-600"}`}>
               {selectedVideo ? "video ✓" : "no video"}
             </span>
@@ -359,11 +465,7 @@ export default function StreamConfig({
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-zinc-400 flex-1">Clear all selections?</span>
                   <button
-                    onClick={() => {
-                      stopPreview();
-                      onClearSelection();
-                      setClearConfirm(false);
-                    }}
+                    onClick={() => { stopPreview(); onClearSelection(); setClearConfirm(false); }}
                     className="px-2.5 py-1 text-xs bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
                   >
                     Yes

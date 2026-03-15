@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { TrackChangedPayload } from "../types";
+
+/** Keep in sync with CROSSFADE_SECS in stream.rs */
+const XFADE_SECS  = 3;
+const XFADE_STEPS = 40;
 
 interface StreamInfo {
   video_path: string;
@@ -18,6 +22,7 @@ interface StreamInfo {
 interface PreviewConfig {
   video_path: string | null;
   music_path: string | null;
+  music_playlist: string[];
   ambient_path: string | null;
   music_volume: number;
   ambient_volume: number;
@@ -30,49 +35,50 @@ function isImagePath(path: string | null | undefined): boolean {
 }
 
 export default function PreviewWindow() {
-  const [info, setInfo] = useState<StreamInfo | null>(null);
+  const [info, setInfo]               = useState<StreamInfo | null>(null);
   const [previewConfig, setPreviewConfig] = useState<PreviewConfig | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const musicRef = useRef<HTMLAudioElement>(null);
+
+  const videoRef   = useRef<HTMLVideoElement>(null);
   const ambientRef = useRef<HTMLAudioElement>(null);
 
-  // Keep a ref to elapsed_seconds at mount time so we can seek on first load
+  // Two slots for crossfading music
+  const audA       = useRef<HTMLAudioElement | null>(null);
+  const audB       = useRef<HTMLAudioElement | null>(null);
+  const activeSlot = useRef<"a" | "b">("a");
+
+  // Mutable refs (avoid stale closures in interval/event handlers)
+  const trackIdxRef     = useRef(0);
+  const xfadingRef      = useRef(false);
+  const xfadeTimer      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playlistRef     = useRef<string[]>([]);
+  const musicVolRef     = useRef(0.8);
+  const isStreamingRef  = useRef(false);
+
   const seekOnLoadRef = useRef<number | null>(null);
+
+  // ── Data loaders ──────────────────────────────────────────────────────────
 
   const loadInfo = async () => {
     try {
       const i = await invoke<StreamInfo | null>("get_current_stream_info");
       setInfo(i);
       return i;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   };
 
-  // Initial load — get both stream info and preview config
   useEffect(() => {
-    loadInfo().then((i) => {
-      if (i) seekOnLoadRef.current = i.elapsed_seconds;
-    });
-    invoke<PreviewConfig>("get_preview_config").then(setPreviewConfig).catch(() => {});
+    loadInfo().then((i) => { if (i) seekOnLoadRef.current = i.elapsed_seconds; });
+    invoke<PreviewConfig>("get_preview_config").then((cfg) => {
+      setPreviewConfig(cfg);
+      playlistRef.current  = cfg.music_playlist ?? [];
+      musicVolRef.current  = cfg.music_volume;
+    }).catch(() => {});
     const interval = setInterval(loadInfo, 3000);
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for track changes
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen<TrackChangedPayload>("track-changed", (event) => {
-      setInfo((prev) =>
-        prev
-          ? { ...prev, music_path: event.payload.music_path, current_track_index: event.payload.track_index }
-          : prev
-      );
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
-  }, []);
+  // ── Derived source ────────────────────────────────────────────────────────
 
-  // Decide which source of data to use
   const isStreaming = !!info?.is_running;
   const videoPath   = isStreaming ? info!.video_path    : previewConfig?.video_path    ?? null;
   const musicPath   = isStreaming ? info!.music_path    : previewConfig?.music_path    ?? null;
@@ -80,7 +86,184 @@ export default function PreviewWindow() {
   const musicVol    = isStreaming ? info!.music_volume  : previewConfig?.music_volume  ?? 0.8;
   const ambientVol  = isStreaming ? info!.ambient_volume: previewConfig?.ambient_volume ?? 0.5;
 
-  // Sync video src; on first load seek to elapsed % duration to resume in-loop position
+  useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
+  useEffect(() => { musicVolRef.current = musicVol; }, [musicVol]);
+
+  // ── Audio element init ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    audA.current = new Audio();
+    audB.current = new Audio();
+    return () => { audA.current?.pause(); audB.current?.pause(); };
+  }, []);
+
+  // ── Crossfade (preview mode only) ─────────────────────────────────────────
+
+  const crossfadeToNext = useCallback(() => {
+    if (xfadingRef.current || isStreamingRef.current) return;
+    const playlist = playlistRef.current;
+    if (playlist.length <= 1) return;
+
+    xfadingRef.current = true;
+    const nextIdx = (trackIdxRef.current + 1) % playlist.length;
+
+    const outSlot = activeSlot.current;
+    const inSlot: "a" | "b" = outSlot === "a" ? "b" : "a";
+    const outAud = outSlot === "a" ? audA.current : audB.current;
+    const inAud  = inSlot  === "a" ? audA.current : audB.current;
+    if (!outAud || !inAud) { xfadingRef.current = false; return; }
+
+    inAud.src    = convertFileSrc(playlist[nextIdx]);
+    inAud.volume = 0;
+    inAud.play().catch(() => {});
+
+    activeSlot.current  = inSlot;
+    trackIdxRef.current = nextIdx;
+
+    let step = 0;
+    const stepMs = (XFADE_SECS * 1000) / XFADE_STEPS;
+    if (xfadeTimer.current) clearInterval(xfadeTimer.current);
+    xfadeTimer.current = setInterval(() => {
+      step++;
+      const t = Math.min(step / XFADE_STEPS, 1);
+      const vol = musicVolRef.current;
+      outAud.volume = (1 - t) * vol;
+      inAud.volume  = t * vol;
+      if (step >= XFADE_STEPS) {
+        clearInterval(xfadeTimer.current!);
+        xfadeTimer.current = null;
+        outAud.pause(); outAud.src = ""; outAud.volume = vol;
+        xfadingRef.current = false;
+      }
+    }, stepMs);
+  }, []);
+
+  // Attach timeupdate / ended to both slots
+  useEffect(() => {
+    const handleTimeUpdate = (aud: HTMLAudioElement) => () => {
+      if (isStreamingRef.current) return;
+      const isActive =
+        (activeSlot.current === "a" && aud === audA.current) ||
+        (activeSlot.current === "b" && aud === audB.current);
+      if (!isActive || xfadingRef.current) return;
+      if (!isFinite(aud.duration) || aud.duration <= 0) return;
+      if (playlistRef.current.length <= 1) return;
+      const remaining = aud.duration - aud.currentTime;
+      if (remaining > 0 && remaining <= XFADE_SECS) crossfadeToNext();
+    };
+    const handleEnded = () => { if (!xfadingRef.current && !isStreamingRef.current) crossfadeToNext(); };
+
+    const a = audA.current; const b = audB.current;
+    if (!a || !b) return;
+    const tuA = handleTimeUpdate(a);
+    const tuB = handleTimeUpdate(b);
+    a.addEventListener("timeupdate", tuA); a.addEventListener("ended", handleEnded);
+    b.addEventListener("timeupdate", tuB); b.addEventListener("ended", handleEnded);
+    return () => {
+      a.removeEventListener("timeupdate", tuA); a.removeEventListener("ended", handleEnded);
+      b.removeEventListener("timeupdate", tuB); b.removeEventListener("ended", handleEnded);
+    };
+  }, [crossfadeToNext]);
+
+  // ── Sync music (preview mode) ─────────────────────────────────────────────
+
+  // When musicPath changes in preview mode, (re)load slot A from scratch
+  useEffect(() => {
+    if (isStreaming) return; // live mode handled separately
+    if (xfadeTimer.current) { clearInterval(xfadeTimer.current); xfadeTimer.current = null; }
+    xfadingRef.current = false;
+
+    [audA.current, audB.current].forEach((a) => {
+      if (!a) return; a.pause(); a.src = ""; a.volume = 1;
+    });
+    activeSlot.current  = "a";
+    trackIdxRef.current = 0;
+
+    const playlist = previewConfig?.music_playlist ?? [];
+    playlistRef.current = playlist;
+
+    if (!musicPath) return;
+    const a = audA.current;
+    if (!a) return;
+    a.src    = convertFileSrc(musicPath);
+    a.volume = musicVol;
+    a.loop   = playlist.length <= 1;
+    a.play().catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicPath, isStreaming]);
+
+  // ── Sync music (live stream mode) ─────────────────────────────────────────
+
+  // In live mode use slot A only — crossfade on track-changed event
+  const liveXfadeRef = useRef(false);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<TrackChangedPayload>("track-changed", (event) => {
+      setInfo((prev) =>
+        prev ? { ...prev, music_path: event.payload.music_path, current_track_index: event.payload.track_index } : prev
+      );
+      if (!isStreamingRef.current || liveXfadeRef.current) return;
+      const newPath = event.payload.music_path;
+      if (!newPath) return;
+
+      liveXfadeRef.current = true;
+      const outSlot = activeSlot.current;
+      const inSlot: "a" | "b" = outSlot === "a" ? "b" : "a";
+      const outAud = outSlot === "a" ? audA.current : audB.current;
+      const inAud  = inSlot  === "a" ? audA.current : audB.current;
+      if (!outAud || !inAud) { liveXfadeRef.current = false; return; }
+
+      inAud.src    = convertFileSrc(newPath);
+      inAud.volume = 0;
+      inAud.play().catch(() => {});
+      activeSlot.current = inSlot;
+
+      let step = 0;
+      const stepMs = (XFADE_SECS * 1000) / XFADE_STEPS;
+      const timer = setInterval(() => {
+        step++;
+        const t = Math.min(step / XFADE_STEPS, 1);
+        const vol = musicVolRef.current;
+        outAud.volume = (1 - t) * vol;
+        inAud.volume  = t * vol;
+        if (step >= XFADE_STEPS) {
+          clearInterval(timer);
+          outAud.pause(); outAud.src = ""; outAud.volume = vol;
+          liveXfadeRef.current = false;
+        }
+      }, stepMs);
+    }).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, []);
+
+  // Initial live stream music load (slot A)
+  useEffect(() => {
+    if (!isStreaming || !musicPath) return;
+    const a = audA.current;
+    if (!a) return;
+    const src = convertFileSrc(musicPath);
+    if (a.src === src) { a.volume = musicVol; return; }
+    a.src    = src;
+    a.volume = musicVol;
+    a.loop   = false;
+    a.play().catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
+
+  // ── Sync ambient ──────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const aud = ambientRef.current;
+    if (!aud) return;
+    if (!ambientPath) { aud.pause(); aud.src = ""; return; }
+    const src = convertFileSrc(ambientPath);
+    if (aud.src !== src) { aud.src = src; aud.load(); aud.play().catch(() => {}); }
+    aud.volume = Math.min(1, Math.max(0, ambientVol));
+  }, [ambientPath, ambientVol]);
+
+  // ── Sync video ────────────────────────────────────────────────────────────
+
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !videoPath || isImagePath(videoPath)) return;
@@ -88,10 +271,8 @@ export default function PreviewWindow() {
     if (vid.src !== src) {
       const seekTarget = isStreaming ? seekOnLoadRef.current : null;
       seekOnLoadRef.current = null;
-
       vid.src = src;
       vid.load();
-
       if (seekTarget != null && seekTarget > 0) {
         const onMeta = () => {
           if (vid.duration && isFinite(vid.duration) && vid.duration > 0) {
@@ -105,47 +286,12 @@ export default function PreviewWindow() {
         vid.play().catch(() => {});
       }
     }
-    vid.volume = 0; // video muted — audio from separate elements
+    vid.volume = 0;
   }, [videoPath, isStreaming]);
 
-  // Sync music src + volume
-  useEffect(() => {
-    const aud = musicRef.current;
-    if (!aud) return;
-    if (!musicPath) {
-      aud.pause();
-      aud.src = "";
-      return;
-    }
-    const src = convertFileSrc(musicPath);
-    if (aud.src !== src) {
-      aud.src = src;
-      aud.load();
-      aud.play().catch(() => {});
-    }
-    aud.volume = Math.min(1, Math.max(0, musicVol));
-  }, [musicPath, musicVol]);
+  // ── Render ────────────────────────────────────────────────────────────────
 
-  // Sync ambient src + volume
-  useEffect(() => {
-    const aud = ambientRef.current;
-    if (!aud) return;
-    if (!ambientPath) {
-      aud.pause();
-      aud.src = "";
-      return;
-    }
-    const src = convertFileSrc(ambientPath);
-    if (aud.src !== src) {
-      aud.src = src;
-      aud.load();
-      aud.play().catch(() => {});
-    }
-    aud.volume = Math.min(1, Math.max(0, ambientVol));
-  }, [ambientPath, ambientVol]);
-
-  const hasContent = !!videoPath;
-  if (!hasContent) {
+  if (!videoPath) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-zinc-950 text-zinc-500 gap-3">
         <div className="w-3 h-3 rounded-full bg-zinc-700" />
@@ -160,22 +306,10 @@ export default function PreviewWindow() {
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden">
       {isImagePath(videoPath) ? (
-        <img
-          src={convertFileSrc(videoPath!)}
-          className="w-full h-full object-cover"
-          alt=""
-        />
+        <img src={convertFileSrc(videoPath)} className="w-full h-full object-cover" alt="" />
       ) : (
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover"
-        />
+        <video ref={videoRef} autoPlay muted loop playsInline className="w-full h-full object-cover" />
       )}
-      <audio ref={musicRef} autoPlay />
       <audio ref={ambientRef} autoPlay loop />
 
       {/* Overlay */}
