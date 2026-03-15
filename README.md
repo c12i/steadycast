@@ -1,53 +1,52 @@
 # Steadycast
 
-A desktop app for broadcasting lofi live streams to YouTube and Twitch without any streaming software setup.
+A desktop app for broadcasting lofi (or any other always-on ambient stream) to YouTube and Twitch without any streaming software setup.
+
+Sample stream produced with Steadycast featuring synthetic audio [here](https://www.youtube.com/watch?v=MqRrxQ121Ak)
 
 ![Stream configuration](docs/screenshot-1.png)
 ![Preview with playlist](docs/screenshot-2.png)
 
 Built with Tauri, React, and a bundled FFmpeg binary.
 
-## What it does
+## How it works
 
-Steadycast takes a video loop (or still image), a music playlist, and an optional ambient sound layer, and combines them into a single RTMP stream. Everything runs locally — no external services, no OBS configuration.
+At its core, Steadycast is a wrapper around a single FFmpeg command that combines a video source, a music playlist, and an optional ambient layer into an [RTMP](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol) stream:
+
+```sh
+ffmpeg \
+  -re -stream_loop -1 -i background.mp4 \
+  -i track1.mp3 -i track2.mp3 -i track3.mp3 \
+  -stream_loop -1 -i ambient.mp3 \
+  -filter_complex "
+    [1:a][2:a]acrossfade=d=3:c1=tri:c2=tri[xcf1];
+    [xcf1][3:a]acrossfade=d=3:c1=tri:c2=tri[xcf_last];
+    [xcf_last]volume=0.8[amusic];
+    [4:a]volume=0.4[aambient];
+    [amusic][aambient]amix=inputs=2:duration=first[aout]
+  " \
+  -map 0:v -map "[aout]" \
+  -c:v libx264 -preset veryfast -b:v 4500k \
+  -c:a aac -b:a 192k -ar 44100 \
+  -f flv rtmp://a.rtmp.youtube.com/live2/<stream-key>
+```
+
+Steadycast builds and manages this command through a GUI, handling playlist cycling, crossfades, preview playback, and stream key storage so you never have to write it by hand.
 
 ## Features
 
-**Streaming**
 - Stream to YouTube or Twitch via RTMP
-- Configurable video bitrate, audio bitrate, frame rate, and H.264 encoding preset
-- Smooth crossfade transitions between playlist tracks (no hard cuts)
+- Music playlist with smooth crossfade transitions between tracks (no hard cuts)
 - Ambient sound layer with independent volume control
-- Still image support as a video source (loops indefinitely)
-
-**Audio**
-- Music playlist with automatic track cycling
-- 3-second crossfade between tracks in both the live stream and the preview
-- Built-in synthesizer for generating ambient/music tracks
-- Upload your own audio files
-
-**Preview**
-- In-app preview panel with live audio playback
-- Pop-out preview window showing the exact video + audio mix
-- Preview accurately reflects the stream output including crossfades
-
-**Asset management**
-- Upload video loops, still images, and audio files
-- Organize music into playlists per stream preset
-- Save and load stream presets (video, music, ambient, volume levels)
-- Export and import presets via URL for sharing
-
-**System**
-- System tray with live status indicator
-- "End Stream" and "Quit" tray menu actions
-- On macOS, closing the window hides it rather than quitting — the app keeps running in the tray
-- Cache management with per-type breakdown (music, ambient, video)
-- Stream keys stored locally per platform
+- Video loop or still image as the visual source
+- Built-in synthesizer for generating lofi music and ambient tracks via [Tone.js](https://tonejs.github.io), inspired by [meel-hd/lofi-engine](https://github.com/meel-hd/lofi-engine)
+- In-app preview that mirrors the actual stream output including crossfades
+- Save and load stream presets
 
 ## Requirements
 
 - macOS (primary target; Windows and Linux are untested)
-- No external FFmpeg installation needed — it is bundled as a sidecar binary
+- No FFmpeg installation needed; it is bundled as a sidecar binary
 
 ## Development
 

@@ -8,11 +8,9 @@
 //!   keys        — stream key storage (YouTube / Twitch)
 //!   db          — SQLite connection and schema bootstrap
 //!   windows     — secondary Tauri windows (preview, logs)
-//!   license     — license validation stub
 
 mod db;
 mod keys;
-mod license;
 mod presets;
 mod settings;
 mod stream;
@@ -142,7 +140,6 @@ pub fn run() {
             presets::rename_preset,
             presets::delete_preset,
             presets::import_preset_from_url,
-            presets::export_preset,
             // Settings & preferences
             settings::get_settings,
             settings::save_settings,
@@ -159,8 +156,6 @@ pub fn run() {
             windows::open_logs_window,
             windows::set_preview_config,
             windows::get_preview_config,
-            // License
-            license::validate_license,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
