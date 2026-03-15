@@ -68,7 +68,7 @@ export default function AppHeader({
     <header className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 bg-surface-raised shrink-0">
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-purple-500" />
-        <span className="font-semibold text-sm tracking-wide text-zinc-100">Lofi Stream Studio</span>
+        <span className="font-semibold text-sm tracking-wide text-zinc-100">Steadycast</span>
       </div>
 
       <div className="flex items-center gap-2">

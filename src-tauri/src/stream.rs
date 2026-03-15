@@ -199,9 +199,9 @@ pub fn stop_stream_sync(state: &StreamState) {
 pub fn update_tray(app: &AppHandle, is_live: bool) {
     if let Some(tray) = app.tray_by_id("main") {
         let tooltip = if is_live {
-            "Lofi Stream Studio — LIVE"
+            "Steadycast — LIVE"
         } else {
-            "Lofi Stream Studio"
+            "Steadycast"
         };
         let _ = tray.set_tooltip(Some(tooltip));
     }

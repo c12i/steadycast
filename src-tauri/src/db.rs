@@ -9,7 +9,7 @@ use std::sync::Mutex;
 pub struct DbState(pub Mutex<Connection>);
 
 pub fn init_db(app_data_dir: &Path) -> Result<Connection> {
-    let conn = Connection::open(app_data_dir.join("lofi_stream.db"))?;
+    let conn = Connection::open(app_data_dir.join("steadycast.db"))?;
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS stream_keys (
             platform TEXT PRIMARY KEY,

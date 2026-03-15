@@ -354,7 +354,7 @@ export default function SettingsPanel({
           <section>
             <SectionHeader>About</SectionHeader>
             <div className="flex flex-col gap-1">
-              <p className="text-xs text-zinc-300 font-medium">Lofi Stream Studio</p>
+              <p className="text-xs text-zinc-300 font-medium">Steadycast</p>
               <p className="text-[11px] text-zinc-500">Version 0.1.0</p>
             </div>
           </section>

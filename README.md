@@ -1,4 +1,4 @@
-# Lofi Stream Studio
+# Steadycast
 
 A desktop app for broadcasting lofi live streams to YouTube and Twitch without any streaming software setup.
 
@@ -6,7 +6,7 @@ Built with Tauri, React, and a bundled FFmpeg binary.
 
 ## What it does
 
-Lofi Stream Studio takes a video loop (or still image), a music playlist, and an optional ambient sound layer, and combines them into a single RTMP stream. Everything runs locally — no external services, no OBS configuration.
+Steadycast takes a video loop (or still image), a music playlist, and an optional ambient sound layer, and combines them into a single RTMP stream. Everything runs locally — no external services, no OBS configuration.
 
 ## Features
 

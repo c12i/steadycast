@@ -1,4 +1,4 @@
-//! Lofi Stream Studio — Tauri backend entry point.
+//! Steadycast — Tauri backend entry point.
 //!
 //! Module responsibilities:
 //!   stream      — FFmpeg process lifecycle, playlist cycling, RTMP output
@@ -46,8 +46,7 @@ pub fn run() {
             app.manage(db::DbState(std::sync::Mutex::new(conn)));
 
             // ── System tray ───────────────────────────────────────────────────
-            let open_item =
-                MenuItem::with_id(app, "open", "Open Lofi Stream Studio", true, None::<&str>)?;
+            let open_item = MenuItem::with_id(app, "open", "Open Steadycast", true, None::<&str>)?;
             let end_stream_item =
                 MenuItem::with_id(app, "end_stream", "End Stream", false, None::<&str>)?;
             // Store a clone so update_tray can toggle it.
@@ -64,7 +63,7 @@ pub fn run() {
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Lofi Stream Studio")
+                .tooltip("Steadycast")
                 .menu(&menu)
                 .on_menu_event({
                     let app_handle = app.handle().clone();
