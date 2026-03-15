@@ -2,6 +2,9 @@
 
 A desktop app for broadcasting lofi live streams to YouTube and Twitch without any streaming software setup.
 
+![Stream configuration](docs/screenshot-1.png)
+![Preview with playlist](docs/screenshot-2.png)
+
 Built with Tauri, React, and a bundled FFmpeg binary.
 
 ## What it does
