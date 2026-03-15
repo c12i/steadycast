@@ -107,6 +107,7 @@ export default function AssetPicker({
   const [audioPreviewId, setAudioPreviewId] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
   const [videoPreviewId, setVideoPreviewId] = useState<string | null>(null);
   const [savePresetName, setSavePresetName] = useState("");
   const [importUrl, setImportUrl] = useState("");
@@ -122,12 +123,16 @@ export default function AssetPicker({
         setAudioProgress(audio.currentTime / audio.duration);
       }
     });
+    audio.addEventListener("loadedmetadata", () => {
+      if (isFinite(audio.duration)) setAudioDuration(audio.duration);
+    });
     audio.addEventListener("play", () => setIsAudioPlaying(true));
     audio.addEventListener("pause", () => setIsAudioPlaying(false));
     audio.addEventListener("ended", () => {
       setAudioPreviewId(null);
       setIsAudioPlaying(false);
       setAudioProgress(0);
+      setAudioDuration(0);
     });
     return () => {
       audio.pause();
@@ -160,9 +165,16 @@ export default function AssetPicker({
       audio.play().catch(() => {});
       setAudioPreviewId(id);
       setAudioProgress(0);
+      setAudioDuration(0);
     },
     [audioPreviewId]
   );
+
+  const handleSeek = useCallback((fraction: number) => {
+    const audio = audioRef.current;
+    if (!audio || !isFinite(audio.duration) || audio.duration === 0) return;
+    audio.currentTime = fraction * audio.duration;
+  }, []);
 
   const nowPlayingId =
     isStreaming && selectedMusic[currentTrackIndex]
@@ -484,10 +496,12 @@ export default function AssetPicker({
                             isPreviewing={isPrev}
                             isPreviewPlaying={isPrev && isAudioPlaying}
                             previewProgress={isPrev ? audioProgress : 0}
+                            duration={isPrev ? audioDuration : 0}
                             isNowPlaying={nowPlayingId === ua.id}
                             isStreaming={isStreaming}
                             onTogglePlaylist={() => isSynth ? onToggleSynthTrack(ua) : onToggleMusic(ua)}
                             onPreview={(e) => toggleAudio(e, ua.id, ua.local_path)}
+                            onSeek={handleSeek}
                             onFavorite={() => toggleFavorite(ua.id)}
                             onDelete={() => onDeleteUserAsset(ua.id)}
                             onRename={isSynth ? (name) => onRenameSynthTrack(ua.id, name) : undefined}
@@ -682,6 +696,17 @@ export default function AssetPicker({
 
 // ── LibraryTrackRow ───────────────────────────────────────────────────────────
 
+function fmtDuration(s: number) {
+  if (!s || !isFinite(s) || s <= 0) return "";
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+function parseTrackName(name: string): { title: string; artist: string | null } {
+  const sep = name.indexOf(" - ");
+  if (sep !== -1) return { artist: name.slice(0, sep).trim(), title: name.slice(sep + 3).trim() };
+  return { title: name, artist: null };
+}
+
 interface LibraryTrackRowProps {
   asset: UserAsset;
   isSynth: boolean;
@@ -690,10 +715,12 @@ interface LibraryTrackRowProps {
   isPreviewing: boolean;
   isPreviewPlaying: boolean;
   previewProgress: number;
+  duration: number;
   isNowPlaying: boolean;
   isStreaming: boolean;
   onTogglePlaylist: () => void;
   onPreview: (e: React.MouseEvent) => void;
+  onSeek: (fraction: number) => void;
   onFavorite: () => void;
   onDelete: () => void;
   onRename?: (name: string) => void;
@@ -701,9 +728,9 @@ interface LibraryTrackRowProps {
 
 function LibraryTrackRow({
   asset, isSynth, isInPlaylist, isFavorited,
-  isPreviewing, isPreviewPlaying, previewProgress,
+  isPreviewing, isPreviewPlaying, previewProgress, duration,
   isNowPlaying, isStreaming,
-  onTogglePlaylist, onPreview, onFavorite, onDelete, onRename,
+  onTogglePlaylist, onPreview, onSeek, onFavorite, onDelete, onRename,
 }: LibraryTrackRowProps) {
   const renameRef = useRef<HTMLInputElement | null>(null);
   const [editing, setEditing] = useState(false);
@@ -717,6 +744,15 @@ function LibraryTrackRow({
     const trimmed = nameInput.trim();
     if (trimmed && trimmed !== asset.name) onRename?.(trimmed);
     else setNameInput(asset.name);
+  };
+
+  const { title, artist } = parseTrackName(asset.name);
+  const elapsed = duration > 0 ? fmtDuration(previewProgress * duration) : "";
+  const total   = fmtDuration(duration);
+
+  const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    onSeek((e.clientX - rect.left) / rect.width);
   };
 
   return (
@@ -736,7 +772,7 @@ function LibraryTrackRow({
           )}
         </button>
 
-        {/* Name + badge */}
+        {/* Name + artist + badge */}
         <div className="flex-1 min-w-0">
           {editing ? (
             <input
@@ -751,22 +787,34 @@ function LibraryTrackRow({
               className="w-full bg-zinc-700 text-zinc-100 text-xs rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-purple-500"
             />
           ) : (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p
-                className={`text-xs font-medium text-zinc-200 truncate ${onRename ? "cursor-text hover:text-white" : ""}`}
-                title={onRename ? "Click to rename" : undefined}
-                onClick={() => onRename && setEditing(true)}
-              >
-                {asset.name}
-              </p>
-              <span className={`text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 ${
-                isSynth ? "bg-purple-900/60 text-purple-400" : "bg-blue-900/60 text-blue-400"
-              }`}>
-                {isSynth ? "synth" : "upload"}
-              </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <p
+                  className={`text-xs font-medium text-zinc-200 truncate ${onRename ? "cursor-text hover:text-white" : ""}`}
+                  title={onRename ? "Click to rename" : undefined}
+                  onClick={() => onRename && setEditing(true)}
+                >
+                  {title}
+                </p>
+                <span className={`text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 ${
+                  isSynth ? "bg-purple-900/60 text-purple-400" : "bg-blue-900/60 text-blue-400"
+                }`}>
+                  {isSynth ? "synth" : "upload"}
+                </span>
+              </div>
+              {artist && (
+                <p className="text-[10px] text-zinc-500 truncate mt-0.5">{artist}</p>
+              )}
             </div>
           )}
         </div>
+
+        {/* Duration */}
+        {total && (
+          <span className="text-[10px] text-zinc-600 font-mono shrink-0 tabular-nums">
+            {isPreviewing && elapsed ? `${elapsed} / ${total}` : total}
+          </span>
+        )}
 
         {/* Favorite */}
         <button
@@ -801,10 +849,14 @@ function LibraryTrackRow({
         </button>
       </div>
 
+      {/* Seek bar */}
       {isPreviewing && (
-        <div className="mx-3 mb-2 h-1 bg-zinc-700 rounded-full">
+        <div
+          className="mx-3 mb-2 h-1.5 bg-zinc-700 rounded-full cursor-pointer group"
+          onClick={handleSeekClick}
+        >
           <div
-            className="h-full bg-purple-500 rounded-full transition-all"
+            className="h-full bg-purple-500 rounded-full group-hover:bg-purple-400 transition-colors"
             style={{ width: `${previewProgress * 100}%` }}
           />
         </div>
