@@ -7,11 +7,11 @@ Sample stream produced with Steadycast featuring synthetic audio [here](https://
 ![Stream configuration](docs/screenshot-1.png)
 ![Preview with playlist](docs/screenshot-2.png)
 
-Built with Tauri, React, and a bundled FFmpeg binary.
+Built with Tauri, React, and a bundled `ffmpeg` binary.
 
 ## How it works
 
-At its core, Steadycast is a wrapper around a single FFmpeg command that combines a video source, a music playlist, and an optional ambient layer into an [RTMP](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol) stream:
+At its core, Steadycast is a wrapper around a single `ffmpeg` command that combines a video source, a music playlist, and an optional ambient layer into an [RTMP](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol) stream:
 
 ```sh
 ffmpeg \
@@ -46,7 +46,23 @@ Steadycast builds and manages this command through a GUI, handling playlist cycl
 ## Requirements
 
 - macOS (primary target; Windows and Linux are untested)
-- No FFmpeg installation needed; it is bundled as a sidecar binary
+- No `ffmpeg` installation needed; it is bundled as a sidecar binary
+
+## Progress
+
+- [x] `ffmpeg` sidecar integration and RTMP streaming to YouTube and Twitch
+- [x] Music playlist with acrossfade transitions (no hard cuts between tracks)
+- [x] Ambient sound layer with independent volume control
+- [x] Still image support as a video source
+- [x] In-app preview panel with live audio playback
+- [x] Pop-out preview window mirroring the actual stream output
+- [x] Stream presets - save, load, rename, delete, share via URL
+- [x] User asset management - upload, rename, delete video/audio files
+- [x] Built-in synthesizer for generating lofi music and ambient tracks
+- [ ] Replace `ffmpeg` symlink with a real static binary via a download script
+- [ ] macOS notarisation and Windows/Linux release targets
+- [ ] Extract core streaming logic into a `steadycast-core` crate
+- [ ] CLI companion (`steadycast-cli`) consuming manifest JSON files
 
 ## Development
 
