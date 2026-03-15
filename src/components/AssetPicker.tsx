@@ -114,6 +114,7 @@ export default function AssetPicker({
   const [savePresetName, setSavePresetName] = useState("");
   const [importUrl, setImportUrl] = useState("");
   const [confirmDeleteId, setConfirmDeleteId]   = useState<string | null>(null);
+  const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
   const [renamingPresetId, setRenamingPresetId] = useState<string | null>(null);
   const [renameInput, setRenameInput]           = useState("");
 
@@ -654,7 +655,7 @@ export default function AssetPicker({
         {activeTab === "video" && (
           <>
             {userAssetsOfType("video").length === 0 && (
-              <p className="text-xs text-zinc-600 text-center py-8">No videos yet. Upload a video loop to get started.</p>
+              <p className="text-xs text-zinc-600 text-center py-8">No videos yet. Upload a video loop or still image to get started.</p>
             )}
             <div className="grid grid-cols-2 gap-2">
               {userAssetsOfType("video").map((ua) => {
@@ -671,43 +672,70 @@ export default function AssetPicker({
                     onClick={() => !isStreaming && onSelectVideo(ua)}
                   >
                     <div className="relative aspect-video bg-zinc-950">
-                      <video
-                        key={ua.id}
-                        src={convertFileSrc(ua.local_path)}
-                        muted
-                        loop
-                        preload="metadata"
-                        autoPlay={isPreviewing}
-                        className="w-full h-full object-cover"
-                        ref={(el) => {
-                          if (!el) return;
-                          if (isPreviewing) { el.play().catch(() => {}); }
-                          else { el.pause(); el.currentTime = 0.1; }
-                        }}
-                      />
+                      {isImagePath(ua.local_path) ? (
+                        <img
+                          src={convertFileSrc(ua.local_path)}
+                          className="w-full h-full object-cover"
+                          alt={ua.name}
+                        />
+                      ) : (
+                        <video
+                          key={ua.id}
+                          src={convertFileSrc(ua.local_path)}
+                          muted
+                          loop
+                          preload="metadata"
+                          autoPlay={isPreviewing}
+                          className="w-full h-full object-cover"
+                          ref={(el) => {
+                            if (!el) return;
+                            if (isPreviewing) { el.play().catch(() => {}); }
+                            else { el.pause(); el.currentTime = 0.1; }
+                          }}
+                        />
+                      )}
                       {isSelected && (
                         <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-purple-700 rounded-full flex items-center justify-center">
                           <span className="text-white text-[10px] font-bold">✓</span>
                         </div>
                       )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setVideoPreviewId(isPreviewing ? null : ua.id); }}
-                        className="absolute bottom-1.5 right-1.5 w-6 h-6 bg-zinc-900/80 hover:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-300 transition-colors"
-                      >
-                        {isPreviewing ? <PauseIcon /> : <PlayIcon />}
-                      </button>
+                      {!isImagePath(ua.local_path) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setVideoPreviewId(isPreviewing ? null : ua.id); }}
+                          className="absolute bottom-1.5 right-1.5 w-6 h-6 bg-zinc-900/80 hover:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-300 transition-colors"
+                        >
+                          {isPreviewing ? <PauseIcon /> : <PlayIcon />}
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 px-2.5 py-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-zinc-200 truncate">{ua.name}</p>
                         <p className="text-[10px] text-zinc-500">uploaded</p>
                       </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteUserAsset(ua.id); }}
-                        className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0"
-                      >
-                        ✕
-                      </button>
+                      {confirmDeleteVideoId === ua.id ? (
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => { onDeleteUserAsset(ua.id); setConfirmDeleteVideoId(null); }}
+                            className="px-1.5 py-0.5 text-[10px] bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteVideoId(null)}
+                            className="px-1.5 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteVideoId(ua.id); }}
+                          className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -717,7 +745,7 @@ export default function AssetPicker({
               onClick={() => onUploadAsset("video")}
               className="mt-1 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
             >
-              + Upload Video
+              + Upload Video / Image
             </button>
           </>
         )}
@@ -732,6 +760,12 @@ export default function AssetPicker({
 function fmtDuration(s: number) {
   if (!s || !isFinite(s) || s <= 0) return "";
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+function isImagePath(path: string | undefined | null): boolean {
+  if (!path) return false;
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
 }
 
 function parseTrackName(name: string): { title: string; artist: string | null } {
@@ -768,6 +802,7 @@ function LibraryTrackRow({
   const renameRef = useRef<HTMLInputElement | null>(null);
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(asset.name);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => { setNameInput(asset.name); }, [asset.name]);
   useEffect(() => { if (editing) renameRef.current?.select(); }, [editing]);
@@ -874,12 +909,29 @@ function LibraryTrackRow({
         </button>
 
         {/* Delete */}
-        <button
-          onClick={onDelete}
-          className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0 ml-1"
-        >
-          ✕
-        </button>
+        {confirmingDelete ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => { setConfirmingDelete(false); onDelete(); }}
+              className="px-1.5 py-0.5 text-[10px] bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="px-1.5 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmingDelete(true)}
+            className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0 ml-1"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Seek bar */}

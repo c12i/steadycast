@@ -53,6 +53,12 @@ function VolumeSlider({
   );
 }
 
+function isImagePath(path: string | undefined | null): boolean {
+  if (!path) return false;
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
+}
+
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
@@ -167,7 +173,9 @@ export default function StreamConfig({
       ambientAudioRef.current = aAudio;
     }
 
-    videoRef.current?.play().catch(() => {});
+    if (!isImagePath(selectedVideo.local_path)) {
+      videoRef.current?.play().catch(() => {});
+    }
     setPreviewing(true);
   }
 
@@ -182,7 +190,9 @@ export default function StreamConfig({
       ambientAudioRef.current.src = "";
       ambientAudioRef.current = null;
     }
-    videoRef.current?.pause();
+    if (!isImagePath(selectedVideo?.local_path)) {
+      videoRef.current?.pause();
+    }
     setPreviewing(false);
     setPreviewTrackIdx(0);
   }
@@ -197,7 +207,8 @@ export default function StreamConfig({
   };
 
   const currentPreviewTrack = previewing ? (selectedMusic[previewTrackIdx] ?? null) : null;
-  const canPreview = !!selectedVideo?.local_path;
+  const hasAudio   = selectedMusic.length > 0 || !!selectedAmbient;
+  const canPreview = !!selectedVideo?.local_path && hasAudio;
 
   return (
     <div className="flex flex-col gap-5 p-4">
@@ -233,19 +244,28 @@ export default function StreamConfig({
             <div ref={videoContainerRef} className="relative rounded-md overflow-hidden bg-zinc-900 aspect-video group">
               {selectedVideo?.local_path ? (
                 <>
-                  <video
-                    ref={videoRef}
-                    key={selectedVideo.id}
-                    src={convertFileSrc(selectedVideo.local_path)}
-                    muted
-                    loop
-                    preload="metadata"
-                    className="w-full h-full object-cover"
-                  />
+                  {isImagePath(selectedVideo.local_path) ? (
+                    <img
+                      src={convertFileSrc(selectedVideo.local_path)}
+                      className="w-full h-full object-cover"
+                      alt={selectedVideo.name}
+                    />
+                  ) : (
+                    <video
+                      ref={videoRef}
+                      key={selectedVideo.id}
+                      src={convertFileSrc(selectedVideo.local_path)}
+                      muted
+                      loop
+                      preload="metadata"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
                   <button
                     onClick={popOutPreview}
-                    title="Open in separate window"
-                    className="absolute bottom-1.5 right-1.5 w-6 h-6 bg-zinc-900/70 hover:bg-zinc-800 rounded flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors opacity-0 group-hover:opacity-100"
+                    disabled={!hasAudio}
+                    title={hasAudio ? "Open in separate window" : "Select music or ambient first"}
+                    className="absolute bottom-1.5 right-1.5 w-6 h-6 bg-zinc-900/70 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed rounded flex items-center justify-center text-zinc-400 hover:text-zinc-100 transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
                       <path d="M6 2H2v12h12V9.5h-1.5V12.5h-9v-9H6V2zm4.5 0H14v3.5h-1.5V3.56l-5.47 5.47-1.06-1.06L11.44 2.5H9.5V1H14v4.5h-1.5V2z"/>
@@ -460,7 +480,9 @@ export default function StreamConfig({
         ) : (
           <button
             onClick={onStart}
-            className="w-full py-3 rounded-lg bg-purple-700 hover:bg-purple-600 text-white text-sm font-semibold transition-colors"
+            disabled={!hasAudio}
+            title={!hasAudio ? "Select music or ambient audio first" : undefined}
+            className="w-full py-3 rounded-lg bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
           >
             Start Stream
           </button>

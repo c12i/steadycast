@@ -23,6 +23,12 @@ interface PreviewConfig {
   ambient_volume: number;
 }
 
+function isImagePath(path: string | null | undefined): boolean {
+  if (!path) return false;
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
+}
+
 export default function PreviewWindow() {
   const [info, setInfo] = useState<StreamInfo | null>(null);
   const [previewConfig, setPreviewConfig] = useState<PreviewConfig | null>(null);
@@ -77,7 +83,7 @@ export default function PreviewWindow() {
   // Sync video src; on first load seek to elapsed % duration to resume in-loop position
   useEffect(() => {
     const vid = videoRef.current;
-    if (!vid || !videoPath) return;
+    if (!vid || !videoPath || isImagePath(videoPath)) return;
     const src = convertFileSrc(videoPath);
     if (vid.src !== src) {
       const seekTarget = isStreaming ? seekOnLoadRef.current : null;
@@ -153,14 +159,22 @@ export default function PreviewWindow() {
 
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden">
-      <video
-        ref={videoRef}
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="w-full h-full object-cover"
-      />
+      {isImagePath(videoPath) ? (
+        <img
+          src={convertFileSrc(videoPath!)}
+          className="w-full h-full object-cover"
+          alt=""
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="w-full h-full object-cover"
+        />
+      )}
       <audio ref={musicRef} autoPlay />
       <audio ref={ambientRef} autoPlay loop />
 

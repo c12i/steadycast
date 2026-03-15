@@ -176,7 +176,7 @@ export default function App() {
   }, []);
 
   const handleUploadAsset = useCallback(async (type: "video" | "music" | "ambient") => {
-    const videoFilters = [{ name: "Video", extensions: ["mp4", "mov", "avi", "mkv"] }];
+    const videoFilters = [{ name: "Video / Image", extensions: ["mp4", "mov", "avi", "mkv", "jpg", "jpeg", "png", "webp", "gif"] }];
     const audioFilters = [{ name: "Audio", extensions: ["mp3", "wav", "flac", "m4a", "ogg"] }];
     try {
       const selected = await open({ multiple: false, filters: type === "video" ? videoFilters : audioFilters });

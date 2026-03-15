@@ -215,6 +215,17 @@ pub fn get_current_stream_info(state: tauri::State<'_, StreamState>) -> Option<C
 
 // ── Private implementation ────────────────────────────────────────────────────
 
+fn is_image(path: &str) -> bool {
+    matches!(
+        std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("jpg" | "jpeg" | "png" | "webp" | "gif")
+    )
+}
+
 fn rtmp_url(platform: &str, key: &str) -> String {
     match platform {
         "twitch" => format!("rtmp://live.twitch.tv/app/{}", key),
@@ -225,8 +236,12 @@ fn rtmp_url(platform: &str, key: &str) -> String {
 fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
-    // Input 0: video (always looped)
-    args.extend(["-re", "-stream_loop", "-1", "-i", &config.video_path].map(String::from));
+    // Input 0: video/image (looped)
+    if is_image(&config.video_path) {
+        args.extend(["-loop", "1", "-i", &config.video_path].map(String::from));
+    } else {
+        args.extend(["-re", "-stream_loop", "-1", "-i", &config.video_path].map(String::from));
+    }
 
     let has_music   = config.music_path.is_some();
     let has_ambient = config.ambient_path.is_some();
