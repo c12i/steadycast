@@ -520,17 +520,20 @@ export default function AssetPicker({
                     onClick={() => !isStreaming && onSelectVideo(ua)}
                   >
                     <div className="relative aspect-video bg-zinc-950">
-                      {isPreviewing ? (
-                        <video
-                          src={convertFileSrc(ua.local_path)}
-                          autoPlay
-                          muted
-                          loop
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-zinc-700 text-xs">No preview</div>
-                      )}
+                      <video
+                        key={ua.id}
+                        src={convertFileSrc(ua.local_path)}
+                        muted
+                        loop
+                        preload="metadata"
+                        autoPlay={isPreviewing}
+                        className="w-full h-full object-cover"
+                        ref={(el) => {
+                          if (!el) return;
+                          if (isPreviewing) { el.play().catch(() => {}); }
+                          else { el.pause(); el.currentTime = 0.1; }
+                        }}
+                      />
                       {isSelected && (
                         <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-purple-700 rounded-full flex items-center justify-center">
                           <span className="text-white text-[10px] font-bold">✓</span>
