@@ -231,13 +231,13 @@ export default function App() {
   // ── Stream control ────────────────────────────────────────────────────────
 
   const handleStartStream = useCallback(async () => {
-    if (!selectedVideo?.local_path) { setStreamError("Select a downloaded video loop first."); return; }
-    if (selectedMusic.length === 0) {
-      setStreamError("Select or generate at least one music track.");
-      return;
-    }
-    if (selectedMusic.some((m) => !m.local_path)) { setStreamError("Some music tracks are not downloaded yet."); return; }
+    if (!selectedVideo?.local_path) { setStreamError("Select a video loop first."); return; }
     if (!streamKey.trim()) { setStreamError("Enter your stream key."); return; }
+
+    const readyMusic = selectedMusic.filter((m) => !!m.local_path);
+    if (selectedMusic.length > 0 && readyMusic.length === 0) {
+      setStreamError("Selected music tracks are not downloaded yet."); return;
+    }
 
     setStreamError(null);
     setCurrentTrackIndex(0);
@@ -245,11 +245,11 @@ export default function App() {
     ambient.stopPreview();
 
     try {
-      const playlist = selectedMusic.map((m) => m.local_path!);
+      const playlist = readyMusic.map((m) => m.local_path!);
       await invoke("start_stream", {
         config: {
           video_path: selectedVideo.local_path,
-          music_path: playlist[0],
+          music_path: playlist[0] ?? null,
           music_playlist: playlist,
           ambient_path: selectedAmbient?.local_path ?? null,
           music_volume: musicVolume,
@@ -329,6 +329,9 @@ export default function App() {
             ambientVolume={ambientVolume}
             durationSeconds={durationSeconds}
             isStreaming={status.is_running}
+            selectedVideo={selectedVideo}
+            selectedMusic={selectedMusic}
+            selectedAmbient={selectedAmbient}
             onPlatformChange={(p) => {
               setPlatform(p);
               setStreamKey(p === "youtube" ? streamKeys.youtube : streamKeys.twitch);
@@ -342,6 +345,11 @@ export default function App() {
             onDurationChange={setDurationSeconds}
             onStart={handleStartStream}
             onStop={handleStopStream}
+            onClearSelection={() => {
+              setSelectedVideo(null);
+              setSelectedMusic([]);
+              setSelectedAmbient(null);
+            }}
           />
         </div>
       </div>

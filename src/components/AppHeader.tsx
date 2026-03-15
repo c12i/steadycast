@@ -19,13 +19,6 @@ export default function AppHeader({ status, onStart, onStop, onOpenSettings }: P
 
       <div className="flex items-center gap-2">
         <button
-          onClick={() => invoke("open_preview_window").catch(() => {})}
-          title="Open stream preview window"
-          className="px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
-        >
-          Preview
-        </button>
-        <button
           onClick={() => invoke("open_logs_window").catch(() => {})}
           title="Open FFmpeg logs window"
           className="px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"

@@ -49,14 +49,14 @@ export type Platform = "youtube" | "twitch";
 
 export interface StreamConfig {
   video_path: string;
-  music_path: string;
+  music_path: string | null;
   music_playlist: string[];
-  ambient_path?: string;
+  ambient_path?: string | null;
   music_volume: number;
   ambient_volume: number;
   platform: Platform;
   stream_key: string;
-  duration_seconds?: number;
+  duration_seconds?: number | null;
 }
 
 export interface RenderJob {

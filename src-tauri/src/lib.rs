@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(stream::StreamState::default())
+        .manage(windows::PreviewState(std::sync::Mutex::new(windows::PreviewConfig::default())))
         .setup(|app| {
             use tauri::Manager;
             let app_dir = app.path().app_data_dir()?;
@@ -71,6 +72,8 @@ pub fn run() {
             // Windows
             windows::open_preview_window,
             windows::open_logs_window,
+            windows::set_preview_config,
+            windows::get_preview_config,
             // License
             license::validate_license,
         ])

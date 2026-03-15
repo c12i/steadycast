@@ -1,4 +1,35 @@
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+
+// ── Preview config state ──────────────────────────────────────────────────────
+
+/// Transient selection passed from the main window to the preview window.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PreviewConfig {
+    pub video_path:    Option<String>,
+    pub music_path:    Option<String>,
+    pub ambient_path:  Option<String>,
+    pub music_volume:  f32,
+    pub ambient_volume: f32,
+}
+
+pub struct PreviewState(pub Mutex<PreviewConfig>);
+
+#[tauri::command]
+pub fn set_preview_config(
+    state: tauri::State<'_, PreviewState>,
+    config: PreviewConfig,
+) {
+    *state.0.lock().unwrap() = config;
+}
+
+#[tauri::command]
+pub fn get_preview_config(state: tauri::State<'_, PreviewState>) -> PreviewConfig {
+    state.0.lock().unwrap().clone()
+}
+
+// ── Window commands ───────────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn open_preview_window(app: AppHandle) -> Result<(), String> {

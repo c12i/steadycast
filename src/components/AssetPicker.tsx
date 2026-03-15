@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { Preset, RenderJob, UserAsset } from "../types";
 import SyntheticPanel from "./SyntheticPanel";
 import { SynthConfig } from "../lib/SyntheticEngine";
@@ -181,6 +181,25 @@ export default function AssetPicker({
   const userAssetsOfType = (type: "video" | "music" | "ambient") =>
     userAssets.filter((u) => u.asset_type === type);
 
+  const popOutPresetPreview = useCallback(async (p: Preset) => {
+    const videoAsset   = p.video_id   ? userAssets.find((a) => a.id === p.video_id)   : null;
+    const musicAsset   = p.music_ids.length > 0 ? userAssets.find((a) => a.id === p.music_ids[0]) : null;
+    const ambientAsset = p.ambient_id ? userAssets.find((a) => a.id === p.ambient_id) : null;
+    if (!videoAsset?.local_path) return;
+    try {
+      await invoke("set_preview_config", {
+        config: {
+          video_path:    videoAsset.local_path,
+          music_path:    musicAsset?.local_path ?? null,
+          ambient_path:  ambientAsset?.local_path ?? null,
+          music_volume:  0.8,
+          ambient_volume: 0.5,
+        },
+      });
+      await invoke("open_preview_window");
+    } catch (_) {}
+  }, [userAssets]);
+
   const toggleFavorite = useCallback((id: string) => {
     setFavoritedIds((prev) => {
       const next = new Set(prev);
@@ -295,6 +314,14 @@ export default function AssetPicker({
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => popOutPresetPreview(p)}
+                          disabled={!p.video_id || !userAssets.find((a) => a.id === p.video_id)?.local_path}
+                          title="Preview in separate window"
+                          className="px-2.5 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 rounded text-zinc-300 font-medium transition-colors"
+                        >
+                          Preview
+                        </button>
                         <button
                           onClick={() => onApplyPreset(p)}
                           disabled={isStreaming}

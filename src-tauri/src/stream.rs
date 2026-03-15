@@ -12,8 +12,8 @@ use tauri_plugin_shell::{process::CommandChild, ShellExt};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StreamConfig {
     pub video_path: String,
-    /// The first (or current) music track. Derived from music_playlist[0] on start.
-    pub music_path: String,
+    /// Current music track path, or None when streaming video + ambient only.
+    pub music_path: Option<String>,
     /// Ordered playlist of music file paths to cycle through.
     pub music_playlist: Vec<String>,
     pub ambient_path: Option<String>,
@@ -46,7 +46,7 @@ pub struct FfmpegLogEvent {
 #[derive(Debug, Serialize, Clone)]
 pub struct CurrentStreamInfo {
     pub video_path: String,
-    pub music_path: String,
+    pub music_path: Option<String>,
     pub ambient_path: Option<String>,
     pub music_volume: f32,
     pub ambient_volume: f32,
@@ -105,13 +105,11 @@ pub async fn start_stream(
 
     let playlist: Vec<String> = if !config.music_playlist.is_empty() {
         config.music_playlist.clone()
+    } else if let Some(ref p) = config.music_path {
+        vec![p.clone()]
     } else {
-        vec![config.music_path.clone()]
+        vec![]
     };
-
-    if playlist.is_empty() {
-        return Err("No music tracks in playlist".into());
-    }
 
     *state.playlist.lock().unwrap()    = playlist.clone();
     *state.track_index.lock().unwrap() = 0;
@@ -119,7 +117,7 @@ pub async fn start_stream(
     state.logs.lock().unwrap().clear();
 
     let mut initial_config = config.clone();
-    initial_config.music_path = playlist[0].clone();
+    initial_config.music_path = playlist.first().cloned();
     *state.base_config.lock().unwrap() = Some(initial_config.clone());
 
     let quality = app
@@ -198,7 +196,7 @@ pub fn get_current_stream_info(state: tauri::State<'_, StreamState>) -> Option<C
     let music_path = state.playlist.lock().unwrap()
         .get(current_track_index)
         .cloned()
-        .unwrap_or(cfg.music_path.clone());
+        .or_else(|| cfg.music_path.clone());
     let elapsed_seconds = state.start_time.lock().unwrap()
         .map(|t| t.elapsed().as_secs())
         .unwrap_or(0);
@@ -227,23 +225,49 @@ fn rtmp_url(platform: &str, key: &str) -> String {
 fn build_args(config: &StreamConfig, quality: &crate::settings::AppSettings) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
 
-    // -re: read video at native frame rate (required for stable RTMP ingest)
-    // -stream_loop -1: loop forever
+    // Input 0: video (always looped)
     args.extend(["-re", "-stream_loop", "-1", "-i", &config.video_path].map(String::from));
-    args.extend(["-i", &config.music_path].map(String::from));
 
-    if let Some(ref ambient) = config.ambient_path {
-        args.extend(["-stream_loop", "-1", "-i", ambient].map(String::from));
-        args.extend([
-            "-filter_complex".into(),
-            format!("[1]volume={}[a1];[2]volume={}[a2];[a1][a2]amix=inputs=2:duration=longest[aout]",
-                config.music_volume, config.ambient_volume),
-        ]);
-    } else {
-        args.extend(["-filter_complex".into(), format!("[1]volume={}[aout]", config.music_volume)]);
+    let has_music   = config.music_path.is_some();
+    let has_ambient = config.ambient_path.is_some();
+
+    // Track which FFmpeg input index each audio source gets
+    let mut next_idx: usize = 1;
+    let music_idx = if has_music {
+        let i = next_idx; next_idx += 1;
+        args.extend(["-i", config.music_path.as_deref().unwrap()].map(String::from));
+        Some(i)
+    } else { None };
+    let ambient_idx = if has_ambient {
+        let i = next_idx;
+        args.extend(["-stream_loop", "-1", "-i", config.ambient_path.as_deref().unwrap()].map(String::from));
+        Some(i)
+    } else { None };
+
+    // Build audio filter + output mapping
+    match (music_idx, ambient_idx) {
+        (Some(mi), Some(ai)) => {
+            args.extend([
+                "-filter_complex".into(),
+                format!("[{mi}]volume={mv}[a1];[{ai}]volume={av}[a2];[a1][a2]amix=inputs=2:duration=longest[aout]",
+                    mv = config.music_volume, av = config.ambient_volume),
+            ]);
+            args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
+        }
+        (Some(mi), None) => {
+            args.extend(["-filter_complex".into(), format!("[{mi}]volume={}[aout]", config.music_volume)]);
+            args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
+        }
+        (None, Some(ai)) => {
+            args.extend(["-filter_complex".into(), format!("[{ai}]volume={}[aout]", config.ambient_volume)]);
+            args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
+        }
+        (None, None) => {
+            // No audio — generate silence so the stream has a valid audio track
+            args.extend(["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"].map(String::from));
+            args.extend(["-map", "0:v", "-map", "1:a"].map(String::from));
+        }
     }
-
-    args.extend(["-map", "0:v", "-map", "[aout]"].map(String::from));
 
     // Video encoding — YouTube requires yuv420p and 2-second keyframe intervals
     let fps     = quality.frame_rate.to_string();
@@ -331,11 +355,12 @@ fn spawn_monitor(
                 return;
             }
 
-            // Clean exit: advance the playlist.
+            // Clean exit: advance the playlist (or stop if no playlist).
             let (next_index, next_music_path) = {
-                let mut idx      = track_index_arc.lock().unwrap();
-                let playlist     = playlist_arc.lock().unwrap();
+                let mut idx  = track_index_arc.lock().unwrap();
+                let playlist = playlist_arc.lock().unwrap();
                 if playlist.is_empty() {
+                    // Video + ambient-only stream — duration elapsed, clean stop.
                     *time_arc.lock().unwrap() = None;
                     stop_caffeinate(&caffeinate_arc);
                     return;
@@ -355,7 +380,7 @@ fn spawn_monitor(
                 let mut cfg = base_config_arc.lock().unwrap()
                     .clone()
                     .expect("base_config missing in monitor");
-                cfg.music_path = next_music_path.clone();
+                cfg.music_path = Some(next_music_path.clone());
                 cfg
             };
 
