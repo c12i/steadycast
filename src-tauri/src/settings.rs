@@ -1,10 +1,10 @@
 //! User-facing configuration: stream quality settings, playback preferences,
 //! cache management, and the cache folder reveal utility.
 
+use crate::db::DbState;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
-use crate::db::DbState;
 
 // ── Preferences ───────────────────────────────────────────────────────────────
 
@@ -39,9 +39,15 @@ pub fn get_preferences(state: tauri::State<'_, DbState>) -> Preferences {
         .ok()
     };
 
-    if let Some(v) = get("default_platform")                        { prefs.default_platform = v; }
-    if let Some(v) = get("music_volume").and_then(|s| s.parse().ok())  { prefs.music_volume = v; }
-    if let Some(v) = get("ambient_volume").and_then(|s| s.parse().ok()) { prefs.ambient_volume = v; }
+    if let Some(v) = get("default_platform") {
+        prefs.default_platform = v;
+    }
+    if let Some(v) = get("music_volume").and_then(|s| s.parse().ok()) {
+        prefs.music_volume = v;
+    }
+    if let Some(v) = get("ambient_volume").and_then(|s| s.parse().ok()) {
+        prefs.ambient_volume = v;
+    }
     prefs
 }
 
@@ -58,8 +64,8 @@ pub fn save_preferences(
         )
     };
     upsert("default_platform", &preferences.default_platform).map_err(|e| e.to_string())?;
-    upsert("music_volume",     &preferences.music_volume.to_string()).map_err(|e| e.to_string())?;
-    upsert("ambient_volume",   &preferences.ambient_volume.to_string()).map_err(|e| e.to_string())?;
+    upsert("music_volume", &preferences.music_volume.to_string()).map_err(|e| e.to_string())?;
+    upsert("ambient_volume", &preferences.ambient_volume.to_string()).map_err(|e| e.to_string())?;
     Ok(())
 }
 

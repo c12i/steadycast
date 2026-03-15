@@ -26,15 +26,100 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(stream::StreamState::default())
-        .manage(windows::PreviewState(std::sync::Mutex::new(windows::PreviewConfig::default())))
+        .manage(windows::PreviewState(std::sync::Mutex::new(
+            windows::PreviewConfig::default(),
+        )))
+        .manage(stream::TrayMenuState::default())
         .setup(|app| {
-            use tauri::Manager;
+            use tauri::{
+                menu::{Menu, MenuItem, PredefinedMenuItem},
+                tray::TrayIconBuilder,
+                Manager,
+            };
+
+            // ── DB / directories ─────────────────────────────────────────────
             let app_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_dir)?;
             std::fs::create_dir_all(app_dir.join("cache"))?;
             std::fs::create_dir_all(app_dir.join("user_assets"))?;
             let conn = db::init_db(&app_dir).map_err(|e| format!("DB init failed: {e}"))?;
             app.manage(db::DbState(std::sync::Mutex::new(conn)));
+
+            // ── System tray ───────────────────────────────────────────────────
+            let open_item =
+                MenuItem::with_id(app, "open", "Open Lofi Stream Studio", true, None::<&str>)?;
+            let end_stream_item =
+                MenuItem::with_id(app, "end_stream", "End Stream", false, None::<&str>)?;
+            // Store a clone so update_tray can toggle it.
+            app.state::<stream::TrayMenuState>()
+                .end_stream_item
+                .lock()
+                .unwrap()
+                .replace(end_stream_item.clone());
+            let separator = PredefinedMenuItem::separator(app)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+            let menu =
+                Menu::with_items(app, &[&open_item, &end_stream_item, &separator, &quit_item])?;
+
+            TrayIconBuilder::with_id("main")
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Lofi Stream Studio")
+                .menu(&menu)
+                .on_menu_event({
+                    let app_handle = app.handle().clone();
+                    move |_tray, event| match event.id().as_ref() {
+                        "open" => {
+                            if let Some(win) = app_handle.get_webview_window("main") {
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
+                        }
+                        "end_stream" => {
+                            if let Some(state) = app_handle.try_state::<stream::StreamState>() {
+                                stream::stop_stream_sync(&state);
+                                stream::update_tray(&app_handle, false);
+                            }
+                        }
+                        "quit" => {
+                            if let Some(state) = app_handle.try_state::<stream::StreamState>() {
+                                stream::stop_stream_sync(&state);
+                            }
+                            app_handle.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Left-click on the tray icon shows the main window.
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // ── Hide main window on close (macOS) ─────────────────────────────
+            if let Some(win) = app.get_webview_window("main") {
+                win.on_window_event({
+                    let win = win.clone();
+                    move |event| {
+                        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                            api.prevent_close();
+                            let _ = win.hide();
+                        }
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

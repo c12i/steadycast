@@ -1,7 +1,7 @@
 //! Stream key storage — save and retrieve per-platform RTMP stream keys.
 
-use rusqlite::params;
 use crate::db::DbState;
+use rusqlite::params;
 
 #[tauri::command]
 pub fn save_stream_key(
