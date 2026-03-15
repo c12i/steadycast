@@ -18,6 +18,7 @@ interface Props {
   onDeleteTrack: (id: string) => void;
   onRandomize: (config: SynthConfig) => void;
   onRenameTrack: (id: string, name: string) => void;
+  hideTracks?: boolean;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -277,6 +278,7 @@ export default function SyntheticPanel({
   synthTracks, selectedMusicIds,
   onChange, onRegenerate, onTogglePreview, onGenerate,
   onToggleTrack, onDeleteTrack, onRandomize, onRenameTrack,
+  hideTracks,
 }: Props) {
   const [durationSeconds, setDurationSeconds] = useState(90);
   // Only block controls while streaming — rendering runs in background
@@ -427,7 +429,7 @@ export default function SyntheticPanel({
       </div>
 
       {/* Generated tracks */}
-      {synthTracks.length > 0 && (
+      {!hideTracks && synthTracks.length > 0 && (
         <div className="space-y-2">
           <p className="text-[11px] text-zinc-500 font-medium uppercase tracking-wide">Your Tracks</p>
           {synthTracks.map((asset) => (

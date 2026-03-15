@@ -6,6 +6,8 @@ import { SynthConfig } from "../lib/SyntheticEngine";
 import { AmbientType, AMBIENT_PRESETS } from "../lib/AmbientEngine";
 
 type Tab = "presets" | "music" | "ambient" | "video";
+type MusicSubTab = "synthesizer" | "library";
+type LibraryFilter = "all" | "synthesized" | "uploaded";
 
 
 interface Props {
@@ -44,12 +46,6 @@ interface Props {
   onRenameSynthTrack: (id: string, name: string) => void;
 }
 
-function formatDuration(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return "—";
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 function PlayIcon() {
   return (
@@ -104,6 +100,14 @@ export default function AssetPicker({
   onRenameSynthTrack,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("music");
+  const [musicSubTab, setMusicSubTab] = useState<MusicSubTab>("synthesizer");
+  const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("lofi-fav-music");
+      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+    } catch { return new Set<string>(); }
+  });
   const [audioPreviewId, setAudioPreviewId] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [audioProgress, setAudioProgress] = useState(0);
@@ -176,6 +180,15 @@ export default function AssetPicker({
 
   const userAssetsOfType = (type: "video" | "music" | "ambient") =>
     userAssets.filter((u) => u.asset_type === type);
+
+  const toggleFavorite = useCallback((id: string) => {
+    setFavoritedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      try { localStorage.setItem("lofi-fav-music", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -353,55 +366,125 @@ export default function AssetPicker({
         {/* ── Music tab ───────────────────────────────────────────────────── */}
         {activeTab === "music" && (
           <>
-            <SyntheticPanel
-              config={synthConfig}
-              isStreaming={isStreaming}
-              isPreviewing={synthPreviewing}
-              renderJobs={renderJobs}
-              synthTracks={userAssetsOfType("music").filter(a => a.id.startsWith("synth-"))}
-              selectedMusicIds={new Set(selectedMusic.map(m => m.id))}
-              onChange={onSynthConfigChange}
-              onRegenerate={onSynthRegenerate}
-              onTogglePreview={onToggleSynthPreview}
-              onGenerate={onGenerateTrack}
-              onToggleTrack={onToggleSynthTrack}
-              onDeleteTrack={onDeleteUserAsset}
-              onRandomize={onRandomizeSynth}
-              onRenameTrack={onRenameSynthTrack}
-            />
+            {/* Sub-tab navigation */}
+            <div className="flex gap-1 mb-2">
+              {(["synthesizer", "library"] as MusicSubTab[]).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setMusicSubTab(st)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                    musicSubTab === st
+                      ? "bg-zinc-700 text-zinc-100"
+                      : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {st === "library"
+                    ? `Library${userAssetsOfType("music").length > 0 ? ` (${userAssetsOfType("music").length})` : ""}`
+                    : "Synthesizer"}
+                </button>
+              ))}
+            </div>
 
-            {/* User-uploaded music */}
-            {userAssetsOfType("music").filter(a => !a.id.startsWith("synth-")).length > 0 && (
+            {/* Synthesizer sub-tab */}
+            {musicSubTab === "synthesizer" && (
+              <SyntheticPanel
+                config={synthConfig}
+                isStreaming={isStreaming}
+                isPreviewing={synthPreviewing}
+                renderJobs={renderJobs}
+                synthTracks={userAssetsOfType("music").filter(a => a.id.startsWith("synth-"))}
+                selectedMusicIds={new Set(selectedMusic.map(m => m.id))}
+                onChange={onSynthConfigChange}
+                onRegenerate={onSynthRegenerate}
+                onTogglePreview={onToggleSynthPreview}
+                onGenerate={onGenerateTrack}
+                onToggleTrack={onToggleSynthTrack}
+                onDeleteTrack={onDeleteUserAsset}
+                onRandomize={onRandomizeSynth}
+                onRenameTrack={onRenameSynthTrack}
+                hideTracks
+              />
+            )}
+
+            {/* Library sub-tab */}
+            {musicSubTab === "library" && (
               <>
-                <p className="text-[11px] text-zinc-500 mt-3 font-medium">My Uploads</p>
-                {userAssetsOfType("music").filter(a => !a.id.startsWith("synth-")).map((ua) => {
-                  const pos = musicPlaylistPos(ua.id);
-                  const isPreviewing = audioPreviewId === ua.id;
-                  return (
-                    <UserAssetRow
-                      key={ua.id}
-                      asset={ua}
-                      isSelected={pos !== null}
-                      badge={pos !== null ? String(pos) : undefined}
-                      isPreviewing={isPreviewing}
-                      isPreviewPlaying={isPreviewing && isAudioPlaying}
-                      previewProgress={isPreviewing ? audioProgress : 0}
-                      isNowPlaying={nowPlayingId === ua.id}
-                      isStreaming={isStreaming}
-                      onClick={() => onToggleMusic(ua)}
-                      onPreview={(e) => toggleAudio(e, ua.id, ua.local_path)}
-                      onDelete={() => onDeleteUserAsset(ua.id)}
-                    />
+                {/* Filter pills */}
+                <div className="flex gap-1.5 mb-2">
+                  {(["all", "synthesized", "uploaded"] as LibraryFilter[]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setLibraryFilter(f)}
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
+                        libraryFilter === f
+                          ? "bg-purple-700 text-white"
+                          : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Track list — favorites float to top */}
+                {(() => {
+                  const allMusic = userAssetsOfType("music");
+                  const filtered = allMusic.filter((a) => {
+                    if (libraryFilter === "synthesized") return a.id.startsWith("synth-");
+                    if (libraryFilter === "uploaded") return !a.id.startsWith("synth-");
+                    return true;
+                  });
+                  const sorted = [
+                    ...filtered.filter((a) => favoritedIds.has(a.id)),
+                    ...filtered.filter((a) => !favoritedIds.has(a.id)),
+                  ];
+                  if (sorted.length === 0) return (
+                    <p className="text-xs text-zinc-600 text-center py-8">
+                      {libraryFilter === "synthesized"
+                        ? "No synthesized tracks yet — generate some in the Synthesizer tab."
+                        : libraryFilter === "uploaded"
+                        ? "No uploaded tracks yet."
+                        : "No tracks yet."}
+                    </p>
                   );
-                })}
+                  return (
+                    <div className="space-y-2">
+                      {sorted.map((ua) => {
+                        const isSynth = ua.id.startsWith("synth-");
+                        const pos = musicPlaylistPos(ua.id);
+                        const isPrev = audioPreviewId === ua.id;
+                        return (
+                          <LibraryTrackRow
+                            key={ua.id}
+                            asset={ua}
+                            isSynth={isSynth}
+                            isInPlaylist={pos !== null}
+                            isFavorited={favoritedIds.has(ua.id)}
+                            isPreviewing={isPrev}
+                            isPreviewPlaying={isPrev && isAudioPlaying}
+                            previewProgress={isPrev ? audioProgress : 0}
+                            isNowPlaying={nowPlayingId === ua.id}
+                            isStreaming={isStreaming}
+                            onTogglePlaylist={() => isSynth ? onToggleSynthTrack(ua) : onToggleMusic(ua)}
+                            onPreview={(e) => toggleAudio(e, ua.id, ua.local_path)}
+                            onFavorite={() => toggleFavorite(ua.id)}
+                            onDelete={() => onDeleteUserAsset(ua.id)}
+                            onRename={isSynth ? (name) => onRenameSynthTrack(ua.id, name) : undefined}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                <button
+                  onClick={() => onUploadAsset("music")}
+                  className="mt-2 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+                >
+                  + Upload Music
+                </button>
               </>
             )}
-            <button
-              onClick={() => onUploadAsset("music")}
-              className="mt-2 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
-            >
-              + Upload Music
-            </button>
           </>
         )}
 
@@ -572,6 +655,139 @@ export default function AssetPicker({
         )}
 
       </div>
+    </div>
+  );
+}
+
+// ── LibraryTrackRow ───────────────────────────────────────────────────────────
+
+interface LibraryTrackRowProps {
+  asset: UserAsset;
+  isSynth: boolean;
+  isInPlaylist: boolean;
+  isFavorited: boolean;
+  isPreviewing: boolean;
+  isPreviewPlaying: boolean;
+  previewProgress: number;
+  isNowPlaying: boolean;
+  isStreaming: boolean;
+  onTogglePlaylist: () => void;
+  onPreview: (e: React.MouseEvent) => void;
+  onFavorite: () => void;
+  onDelete: () => void;
+  onRename?: (name: string) => void;
+}
+
+function LibraryTrackRow({
+  asset, isSynth, isInPlaylist, isFavorited,
+  isPreviewing, isPreviewPlaying, previewProgress,
+  isNowPlaying, isStreaming,
+  onTogglePlaylist, onPreview, onFavorite, onDelete, onRename,
+}: LibraryTrackRowProps) {
+  const renameRef = useRef<HTMLInputElement | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [nameInput, setNameInput] = useState(asset.name);
+
+  useEffect(() => { setNameInput(asset.name); }, [asset.name]);
+  useEffect(() => { if (editing) renameRef.current?.select(); }, [editing]);
+
+  const commitRename = () => {
+    setEditing(false);
+    const trimmed = nameInput.trim();
+    if (trimmed && trimmed !== asset.name) onRename?.(trimmed);
+    else setNameInput(asset.name);
+  };
+
+  return (
+    <div className={`rounded-lg border transition-all ${
+      isInPlaylist ? "border-purple-500 bg-purple-950/20" : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+    }`}>
+      <div className="flex items-center gap-2 px-3 py-2">
+        {/* Play / pause */}
+        <button
+          onClick={onPreview}
+          disabled={isStreaming}
+          className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-full flex items-center justify-center text-zinc-300 shrink-0 transition-colors relative"
+        >
+          {isPreviewing && isPreviewPlaying ? <PauseIcon /> : <PlayIcon />}
+          {isNowPlaying && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          )}
+        </button>
+
+        {/* Name + badge */}
+        <div className="flex-1 min-w-0">
+          {editing ? (
+            <input
+              ref={renameRef}
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitRename();
+                if (e.key === "Escape") { setEditing(false); setNameInput(asset.name); }
+              }}
+              className="w-full bg-zinc-700 text-zinc-100 text-xs rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-purple-500"
+            />
+          ) : (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p
+                className={`text-xs font-medium text-zinc-200 truncate ${onRename ? "cursor-text hover:text-white" : ""}`}
+                title={onRename ? "Click to rename" : undefined}
+                onClick={() => onRename && setEditing(true)}
+              >
+                {asset.name}
+              </p>
+              <span className={`text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 ${
+                isSynth ? "bg-purple-900/60 text-purple-400" : "bg-blue-900/60 text-blue-400"
+              }`}>
+                {isSynth ? "synth" : "upload"}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Favorite */}
+        <button
+          onClick={onFavorite}
+          title={isFavorited ? "Unfavorite" : "Favorite"}
+          className={`text-sm transition-colors shrink-0 ${
+            isFavorited ? "text-yellow-400" : "text-zinc-600 hover:text-yellow-400"
+          }`}
+        >
+          {isFavorited ? "★" : "☆"}
+        </button>
+
+        {/* +Playlist toggle */}
+        <button
+          onClick={() => !isStreaming && onTogglePlaylist()}
+          disabled={isStreaming}
+          className={`text-[10px] font-medium px-2 py-0.5 rounded transition-colors shrink-0 disabled:opacity-40 ${
+            isInPlaylist
+              ? "bg-purple-700/40 text-purple-300 hover:bg-red-900/40 hover:text-red-300"
+              : "bg-zinc-700 text-zinc-300 hover:bg-purple-700 hover:text-white"
+          }`}
+        >
+          {isInPlaylist ? "In playlist ✓" : "+ Playlist"}
+        </button>
+
+        {/* Delete */}
+        <button
+          onClick={onDelete}
+          className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0 ml-1"
+        >
+          ✕
+        </button>
+      </div>
+
+      {isPreviewing && (
+        <div className="mx-3 mb-2 h-1 bg-zinc-700 rounded-full">
+          <div
+            className="h-full bg-purple-500 rounded-full transition-all"
+            style={{ width: `${previewProgress * 100}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
