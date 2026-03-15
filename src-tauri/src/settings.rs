@@ -6,7 +6,7 @@ use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-// ── Preferences ───────────────────────────────────────────────────────────────
+// Preferences
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Preferences {
@@ -69,7 +69,7 @@ pub fn save_preferences(
     Ok(())
 }
 
-// ── App settings ──────────────────────────────────────────────────────────────
+// App settings
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {

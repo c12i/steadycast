@@ -19,19 +19,19 @@ export default function StatusBar({ status }: Props) {
       {status.is_running ? (
         <>
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs font-semibold text-green-400 uppercase tracking-wider">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-green-400">
               Live
             </span>
           </div>
-          <span className="text-xs text-zinc-500 tabular-nums font-mono">
+          <span className="font-mono text-xs tabular-nums text-zinc-500">
             {formatElapsed(status.elapsed_seconds)}
           </span>
         </>
       ) : (
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-zinc-600" />
-          <span className="text-xs text-zinc-500 uppercase tracking-wider">Offline</span>
+          <span className="h-2 w-2 rounded-full bg-zinc-600" />
+          <span className="text-xs uppercase tracking-wider text-zinc-500">Offline</span>
         </div>
       )}
     </div>

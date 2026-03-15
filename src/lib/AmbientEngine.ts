@@ -12,8 +12,14 @@
 import { arrayBufferToBase64 } from "./audioUtils";
 
 export type AmbientType =
-  | "rain" | "ocean" | "wind" | "fire"
-  | "forest" | "night" | "cafe" | "space";
+  | "rain"
+  | "ocean"
+  | "wind"
+  | "fire"
+  | "forest"
+  | "night"
+  | "cafe"
+  | "space";
 
 export interface AmbientPreset {
   id: AmbientType;
@@ -22,21 +28,21 @@ export interface AmbientPreset {
 }
 
 export const AMBIENT_PRESETS: AmbientPreset[] = [
-  { id: "rain",   label: "Rain",       description: "Steady rainfall" },
-  { id: "ocean",  label: "Ocean",      description: "Waves on the shore" },
-  { id: "wind",   label: "Wind",       description: "Breeze through trees" },
-  { id: "fire",   label: "Fireplace",  description: "Warm crackling fire" },
-  { id: "forest", label: "Forest",     description: "Birds and rustling leaves" },
-  { id: "night",  label: "Night",      description: "Crickets and stillness" },
-  { id: "cafe",   label: "Café",       description: "Background chatter" },
-  { id: "space",  label: "Deep Space", description: "Cosmic ambient haze" },
+  { id: "rain", label: "Rain", description: "Steady rainfall" },
+  { id: "ocean", label: "Ocean", description: "Waves on the shore" },
+  { id: "wind", label: "Wind", description: "Breeze through trees" },
+  { id: "fire", label: "Fireplace", description: "Warm crackling fire" },
+  { id: "forest", label: "Forest", description: "Birds and rustling leaves" },
+  { id: "night", label: "Night", description: "Crickets and stillness" },
+  { id: "cafe", label: "Café", description: "Background chatter" },
+  { id: "space", label: "Deep Space", description: "Cosmic ambient haze" },
 ];
 
 export function ambientSrcUrl(type: AmbientType): string {
   return `/assets/ambient/${type}.mp3`;
 }
 
-// ── Preview engine ─────────────────────────────────────────────────────────────
+// Preview engine
 
 export class AmbientEngine {
   private audio: HTMLAudioElement | null = null;
@@ -68,7 +74,7 @@ export class AmbientEngine {
       };
 
       audio.addEventListener("canplay", onCanPlay, { once: true });
-      audio.addEventListener("error",   onError,   { once: true });
+      audio.addEventListener("error", onError, { once: true });
       audio.src = ambientSrcUrl(this.type);
       audio.load();
     });
@@ -83,7 +89,7 @@ export class AmbientEngine {
   }
 }
 
-// ── File fetcher for "Use" ─────────────────────────────────────────────────────
+// File fetcher for "Use"
 
 /** Fetches the ambient MP3 and returns it as a base64 string for IPC transfer. */
 export async function fetchAmbientAsBase64(type: AmbientType): Promise<string> {

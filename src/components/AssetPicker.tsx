@@ -9,7 +9,6 @@ type Tab = "presets" | "music" | "ambient" | "video";
 type MusicSubTab = "synthesizer" | "library";
 type LibraryFilter = "all" | "synthesized" | "uploaded";
 
-
 interface Props {
   presets: Preset[];
   userAssets: UserAsset[];
@@ -45,10 +44,9 @@ interface Props {
   onRenameSynthTrack: (id: string, name: string) => void;
 }
 
-
 function PlayIcon() {
   return (
-    <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+    <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
       <path d="M3 2.5l10 5.5-10 5.5V2.5z" />
     </svg>
   );
@@ -56,14 +54,12 @@ function PlayIcon() {
 
 function PauseIcon() {
   return (
-    <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+    <svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
       <rect x="3" y="2" width="4" height="12" rx="1" />
       <rect x="9" y="2" width="4" height="12" rx="1" />
     </svg>
   );
 }
-
-
 
 export default function AssetPicker({
   presets,
@@ -104,7 +100,9 @@ export default function AssetPicker({
     try {
       const raw = localStorage.getItem("lofi-fav-music");
       return new Set(raw ? (JSON.parse(raw) as string[]) : []);
-    } catch { return new Set<string>(); }
+    } catch {
+      return new Set<string>();
+    }
   });
   const [audioPreviewId, setAudioPreviewId] = useState<string | null>(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -113,10 +111,10 @@ export default function AssetPicker({
   const [videoPreviewId, setVideoPreviewId] = useState<string | null>(null);
   const [savePresetName, setSavePresetName] = useState("");
   const [importUrl, setImportUrl] = useState("");
-  const [confirmDeleteId, setConfirmDeleteId]   = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
   const [renamingPresetId, setRenamingPresetId] = useState<string | null>(null);
-  const [renameInput, setRenameInput]           = useState("");
+  const [renameInput, setRenameInput] = useState("");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -158,7 +156,7 @@ export default function AssetPicker({
   const toggleAudio = useCallback(
     (e: React.MouseEvent, id: string, localPath?: string, previewUrl?: string | null) => {
       e.stopPropagation();
-      const src = localPath ? convertFileSrc(localPath) : previewUrl ?? null;
+      const src = localPath ? convertFileSrc(localPath) : (previewUrl ?? null);
       if (!src || !audioRef.current) return;
       const audio = audioRef.current;
       if (audioPreviewId === id) {
@@ -182,9 +180,7 @@ export default function AssetPicker({
   }, []);
 
   const nowPlayingId =
-    isStreaming && selectedMusic[currentTrackIndex]
-      ? selectedMusic[currentTrackIndex].id
-      : null;
+    isStreaming && selectedMusic[currentTrackIndex] ? selectedMusic[currentTrackIndex].id : null;
 
   const musicPlaylistPos = (id: string): number | null => {
     const idx = selectedMusic.findIndex((m) => m.id === id);
@@ -194,46 +190,51 @@ export default function AssetPicker({
   const userAssetsOfType = (type: "video" | "music" | "ambient") =>
     userAssets.filter((u) => u.asset_type === type);
 
-  const popOutPresetPreview = useCallback(async (p: Preset) => {
-    const videoAsset   = p.video_id   ? userAssets.find((a) => a.id === p.video_id)   : null;
-    const ambientAsset = p.ambient_id ? userAssets.find((a) => a.id === p.ambient_id) : null;
-    if (!videoAsset?.local_path) return;
-    const musicAssets = p.music_ids
-      .map((id) => userAssets.find((a) => a.id === id))
-      .filter((a): a is typeof userAssets[0] => !!a?.local_path);
-    try {
-      await invoke("set_preview_config", {
-        config: {
-          video_path:     videoAsset.local_path,
-          music_path:     musicAssets[0]?.local_path ?? null,
-          music_playlist: musicAssets.map((a) => a.local_path!),
-          ambient_path:   ambientAsset?.local_path ?? null,
-          music_volume:   0.8,
-          ambient_volume: 0.5,
-        },
-      });
-      await invoke("open_preview_window");
-    } catch (_) {}
-  }, [userAssets]);
+  const popOutPresetPreview = useCallback(
+    async (p: Preset) => {
+      const videoAsset = p.video_id ? userAssets.find((a) => a.id === p.video_id) : null;
+      const ambientAsset = p.ambient_id ? userAssets.find((a) => a.id === p.ambient_id) : null;
+      if (!videoAsset?.local_path) return;
+      const musicAssets = p.music_ids
+        .map((id) => userAssets.find((a) => a.id === id))
+        .filter((a): a is (typeof userAssets)[0] => !!a?.local_path);
+      try {
+        await invoke("set_preview_config", {
+          config: {
+            video_path: videoAsset.local_path,
+            music_path: musicAssets[0]?.local_path ?? null,
+            music_playlist: musicAssets.map((a) => a.local_path!),
+            ambient_path: ambientAsset?.local_path ?? null,
+            music_volume: 0.8,
+            ambient_volume: 0.5,
+          },
+        });
+        await invoke("open_preview_window");
+      } catch (_) {}
+    },
+    [userAssets]
+  );
 
   const toggleFavorite = useCallback((id: string) => {
     setFavoritedIds((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      try { localStorage.setItem("lofi-fav-music", JSON.stringify([...next])); } catch {}
+      try {
+        localStorage.setItem("lofi-fav-music", JSON.stringify([...next]));
+      } catch {}
       return next;
     });
   }, []);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Tabs */}
-      <div className="flex border-b border-zinc-800 shrink-0">
+      <div className="flex shrink-0 border-b border-zinc-800">
         {(["presets", "music", "ambient", "video"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
-            className={`px-4 py-2.5 text-xs font-medium capitalize transition-colors relative ${
+            className={`relative px-4 py-2.5 text-xs font-medium capitalize transition-colors ${
               activeTab === t
                 ? "bg-zinc-800 text-zinc-100"
                 : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
@@ -241,7 +242,7 @@ export default function AssetPicker({
           >
             {t}
             {t === "music" && selectedMusic.length > 0 && (
-              <span className="ml-1.5 bg-purple-900 text-purple-300 text-[10px] px-1 rounded">
+              <span className="ml-1.5 rounded bg-purple-900 px-1 text-[10px] text-purple-300">
                 {selectedMusic.length}
               </span>
             )}
@@ -249,12 +250,12 @@ export default function AssetPicker({
         ))}
         {isStreaming && (
           <div className="ml-auto flex items-center px-3">
-            <span className="text-[10px] text-green-400 font-medium">Stream running</span>
+            <span className="text-[10px] font-medium text-green-400">Stream running</span>
           </div>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
         {/* ── Presets tab ─────────────────────────────────────────────────── */}
         {activeTab === "presets" && (
           <>
@@ -265,7 +266,7 @@ export default function AssetPicker({
                 placeholder="Preset manifest URL…"
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
-                className="flex-1 bg-zinc-900 text-zinc-100 text-xs rounded px-3 py-1.5 border border-zinc-700 focus:outline-none focus:border-purple-500 placeholder-zinc-600"
+                className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
               />
               <button
                 onClick={() => {
@@ -275,7 +276,7 @@ export default function AssetPicker({
                   }
                 }}
                 disabled={!importUrl.trim()}
-                className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 rounded border border-zinc-700 text-zinc-300 transition-colors whitespace-nowrap"
+                className="whitespace-nowrap rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-40"
               >
                 Import URL
               </button>
@@ -283,23 +284,21 @@ export default function AssetPicker({
 
             {/* Preset grid */}
             {presets.length === 0 && (
-              <p className="text-xs text-zinc-600 text-center py-8">No presets yet.</p>
+              <p className="py-8 text-center text-xs text-zinc-600">No presets yet.</p>
             )}
             <div className="grid grid-cols-1 gap-2">
               {presets.map((p) => {
-                const videoAsset = p.video_id
-                  ? userAssets.find((a) => a.id === p.video_id)
-                  : null;
+                const videoAsset = p.video_id ? userAssets.find((a) => a.id === p.video_id) : null;
                 const ambientAsset = p.ambient_id
                   ? userAssets.find((a) => a.id === p.ambient_id)
                   : null;
                 return (
                   <div
                     key={p.id}
-                    className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 flex flex-col gap-2"
+                    className="flex flex-col gap-2 rounded-lg border border-zinc-800 bg-zinc-900 p-3"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           {renamingPresetId === p.id ? (
                             <input
@@ -315,11 +314,11 @@ export default function AssetPicker({
                                 }
                                 if (e.key === "Escape") setRenamingPresetId(null);
                               }}
-                              className="flex-1 bg-zinc-700 text-zinc-100 text-xs rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-purple-500 min-w-0"
+                              className="min-w-0 flex-1 rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-purple-500"
                             />
                           ) : (
                             <span
-                              className={`text-sm font-medium text-zinc-200 truncate ${!p.is_builtin ? "cursor-text hover:text-white" : ""}`}
+                              className={`truncate text-sm font-medium text-zinc-200 ${!p.is_builtin ? "cursor-text hover:text-white" : ""}`}
                               title={!p.is_builtin ? "Click to rename" : undefined}
                               onClick={() => {
                                 if (!p.is_builtin) {
@@ -332,61 +331,68 @@ export default function AssetPicker({
                             </span>
                           )}
                           {p.is_builtin && (
-                            <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded shrink-0">
+                            <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
                               built-in
                             </span>
                           )}
                         </div>
                         {p.description && (
-                          <p className="text-[11px] text-zinc-500 mt-0.5 truncate">{p.description}</p>
+                          <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+                            {p.description}
+                          </p>
                         )}
-                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {videoAsset && (
-                            <span className="text-[10px] bg-blue-950 text-blue-400 px-1.5 py-0.5 rounded">
+                            <span className="rounded bg-blue-950 px-1.5 py-0.5 text-[10px] text-blue-400">
                               vid: {videoAsset.name}
                             </span>
                           )}
                           {p.music_ids.length > 0 && (
-                            <span className="text-[10px] bg-purple-950 text-purple-400 px-1.5 py-0.5 rounded">
+                            <span className="rounded bg-purple-950 px-1.5 py-0.5 text-[10px] text-purple-400">
                               {p.music_ids.length} track{p.music_ids.length !== 1 ? "s" : ""}
                             </span>
                           )}
                           {ambientAsset && (
-                            <span className="text-[10px] bg-green-950 text-green-400 px-1.5 py-0.5 rounded">
+                            <span className="rounded bg-green-950 px-1.5 py-0.5 text-[10px] text-green-400">
                               amb: {ambientAsset.name}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <button
                           onClick={() => popOutPresetPreview(p)}
-                          disabled={!p.video_id || !userAssets.find((a) => a.id === p.video_id)?.local_path}
+                          disabled={
+                            !p.video_id || !userAssets.find((a) => a.id === p.video_id)?.local_path
+                          }
                           title="Preview in separate window"
-                          className="px-2.5 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 rounded text-zinc-300 font-medium transition-colors"
+                          className="rounded bg-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-600 disabled:opacity-40"
                         >
                           Preview
                         </button>
                         <button
                           onClick={() => onApplyPreset(p)}
                           disabled={isStreaming}
-                          className="px-2.5 py-1 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded text-white font-medium transition-colors"
+                          className="rounded bg-purple-700 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-40"
                         >
                           Apply
                         </button>
-                        {!p.is_builtin && (
-                          confirmDeleteId === p.id ? (
+                        {!p.is_builtin &&
+                          (confirmDeleteId === p.id ? (
                             <div className="flex items-center gap-1">
                               <span className="text-xs text-zinc-400">Delete?</span>
                               <button
-                                onClick={() => { onDeletePreset(p.id); setConfirmDeleteId(null); }}
-                                className="px-2 py-1 text-xs bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
+                                onClick={() => {
+                                  onDeletePreset(p.id);
+                                  setConfirmDeleteId(null);
+                                }}
+                                className="rounded bg-red-800 px-2 py-1 text-xs text-red-200 transition-colors hover:bg-red-700"
                               >
                                 Yes
                               </button>
                               <button
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="px-2 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300 transition-colors"
+                                className="rounded bg-zinc-700 px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-600"
                               >
                                 No
                               </button>
@@ -394,12 +400,11 @@ export default function AssetPicker({
                           ) : (
                             <button
                               onClick={() => setConfirmDeleteId(p.id)}
-                              className="px-2 py-1 text-xs bg-zinc-800 hover:bg-red-900 rounded text-zinc-400 hover:text-red-400 transition-colors"
+                              className="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-red-900 hover:text-red-400"
                             >
                               ✕
                             </button>
-                          )
-                        )}
+                          ))}
                       </div>
                     </div>
                   </div>
@@ -408,15 +413,15 @@ export default function AssetPicker({
             </div>
 
             {/* Save preset */}
-            <div className="border-t border-zinc-800 pt-3 mt-1">
-              <p className="text-[11px] text-zinc-500 mb-2">Save current selection as preset</p>
+            <div className="mt-1 border-t border-zinc-800 pt-3">
+              <p className="mb-2 text-[11px] text-zinc-500">Save current selection as preset</p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   placeholder="Preset name…"
                   value={savePresetName}
                   onChange={(e) => setSavePresetName(e.target.value)}
-                  className="flex-1 bg-zinc-900 text-zinc-100 text-xs rounded px-3 py-1.5 border border-zinc-700 focus:outline-none focus:border-purple-500 placeholder-zinc-600"
+                  className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
                 />
                 <button
                   onClick={() => {
@@ -426,7 +431,7 @@ export default function AssetPicker({
                     }
                   }}
                   disabled={!savePresetName.trim()}
-                  className="px-3 py-1.5 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded text-white font-medium transition-colors"
+                  className="rounded bg-purple-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-40"
                 >
                   Save
                 </button>
@@ -439,12 +444,12 @@ export default function AssetPicker({
         {activeTab === "music" && (
           <>
             {/* Sub-tab navigation */}
-            <div className="flex gap-1 mb-2">
+            <div className="mb-2 flex gap-1">
               {(["library", "synthesizer"] as MusicSubTab[]).map((st) => (
                 <button
                   key={st}
                   onClick={() => setMusicSubTab(st)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors ${
+                  className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
                     musicSubTab === st
                       ? "bg-zinc-700 text-zinc-100"
                       : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
@@ -463,8 +468,8 @@ export default function AssetPicker({
                 config={synthConfig}
                 isStreaming={isStreaming}
                 isPreviewing={synthPreviewing}
-                synthTracks={userAssetsOfType("music").filter(a => a.id.startsWith("synth-"))}
-                selectedMusicIds={new Set(selectedMusic.map(m => m.id))}
+                synthTracks={userAssetsOfType("music").filter((a) => a.id.startsWith("synth-"))}
+                selectedMusicIds={new Set(selectedMusic.map((m) => m.id))}
                 onChange={onSynthConfigChange}
                 onTogglePreview={onToggleSynthPreview}
                 onGenerate={onGenerateTrack}
@@ -480,12 +485,12 @@ export default function AssetPicker({
             {musicSubTab === "library" && (
               <>
                 {/* Filter pills */}
-                <div className="flex gap-1.5 mb-2">
+                <div className="mb-2 flex gap-1.5">
                   {(["all", "synthesized", "uploaded"] as LibraryFilter[]).map((f) => (
                     <button
                       key={f}
                       onClick={() => setLibraryFilter(f)}
-                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium capitalize transition-colors ${
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors ${
                         libraryFilter === f
                           ? "bg-purple-700 text-white"
                           : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
@@ -508,15 +513,16 @@ export default function AssetPicker({
                     ...filtered.filter((a) => favoritedIds.has(a.id)),
                     ...filtered.filter((a) => !favoritedIds.has(a.id)),
                   ];
-                  if (sorted.length === 0) return (
-                    <p className="text-xs text-zinc-600 text-center py-8">
-                      {libraryFilter === "synthesized"
-                        ? "No synthesized tracks yet — generate some in the Synthesizer tab."
-                        : libraryFilter === "uploaded"
-                        ? "No uploaded tracks yet."
-                        : "No tracks yet."}
-                    </p>
-                  );
+                  if (sorted.length === 0)
+                    return (
+                      <p className="py-8 text-center text-xs text-zinc-600">
+                        {libraryFilter === "synthesized"
+                          ? "No synthesized tracks yet — generate some in the Synthesizer tab."
+                          : libraryFilter === "uploaded"
+                            ? "No uploaded tracks yet."
+                            : "No tracks yet."}
+                      </p>
+                    );
                   return (
                     <div className="space-y-2">
                       {sorted.map((ua) => {
@@ -536,12 +542,16 @@ export default function AssetPicker({
                             duration={isPrev ? audioDuration : 0}
                             isNowPlaying={nowPlayingId === ua.id}
                             isStreaming={isStreaming}
-                            onTogglePlaylist={() => isSynth ? onToggleSynthTrack(ua) : onToggleMusic(ua)}
+                            onTogglePlaylist={() =>
+                              isSynth ? onToggleSynthTrack(ua) : onToggleMusic(ua)
+                            }
                             onPreview={(e) => toggleAudio(e, ua.id, ua.local_path)}
                             onSeek={handleSeek}
                             onFavorite={() => toggleFavorite(ua.id)}
                             onDelete={() => onDeleteUserAsset(ua.id)}
-                            onRename={isSynth ? (name) => onRenameSynthTrack(ua.id, name) : undefined}
+                            onRename={
+                              isSynth ? (name) => onRenameSynthTrack(ua.id, name) : undefined
+                            }
                           />
                         );
                       })}
@@ -551,7 +561,7 @@ export default function AssetPicker({
 
                 <button
                   onClick={() => onUploadAsset("music")}
-                  className="mt-2 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+                  className="mt-2 w-full rounded border border-dashed border-zinc-700 py-2 text-xs text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-300"
                 >
                   + Upload Music
                 </button>
@@ -566,7 +576,7 @@ export default function AssetPicker({
             {/* None */}
             <div
               onClick={() => !isStreaming && onSelectAmbient(null)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${
+              className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition-all ${
                 isStreaming ? "cursor-default opacity-60" : "cursor-pointer"
               } ${
                 selectedAmbient === null
@@ -574,43 +584,45 @@ export default function AssetPicker({
                   : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
               }`}
             >
-              <span className="w-6 h-6 flex items-center justify-center shrink-0 text-sm">🔇</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center text-sm">🔇</span>
               <span className="flex-1 text-xs font-medium text-zinc-300">None</span>
-              {selectedAmbient === null && <span className="text-[10px] text-purple-400 font-bold">✓</span>}
+              {selectedAmbient === null && (
+                <span className="text-[10px] font-bold text-purple-400">✓</span>
+              )}
             </div>
 
             {/* Error banner */}
             {ambientPreviewError && (
-              <p className="text-[11px] text-red-400 bg-red-950/40 border border-red-800 rounded px-2.5 py-1.5">
+              <p className="rounded border border-red-800 bg-red-950/40 px-2.5 py-1.5 text-[11px] text-red-400">
                 {ambientPreviewError}
               </p>
             )}
 
             {/* Built-in presets */}
-            <p className="text-[11px] text-zinc-500 font-medium mt-1">Built-in Sounds</p>
+            <p className="mt-1 text-[11px] font-medium text-zinc-500">Built-in Sounds</p>
             {AMBIENT_PRESETS.map((preset) => {
               const isPreviewing = ambientPreviewingType === preset.id;
-              const isRendering  = ambientRenderingType === preset.id;
+              const isRendering = ambientRenderingType === preset.id;
               return (
                 <div
                   key={preset.id}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900"
+                  className="flex items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2"
                 >
                   <button
                     onClick={() => onToggleAmbientPreview(preset.id)}
                     disabled={isStreaming}
-                    className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-full flex items-center justify-center text-zinc-300 shrink-0 transition-colors"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-30"
                   >
                     {isPreviewing ? <PauseIcon /> : <PlayIcon />}
                   </button>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-zinc-200">{preset.label}</p>
                     <p className="text-[10px] text-zinc-500">{preset.description}</p>
                   </div>
                   <button
                     onClick={() => !isStreaming && !isRendering && onUseAmbientPreset(preset.id)}
                     disabled={isStreaming || !!ambientRenderingType}
-                    className="px-2.5 py-1 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-40 rounded text-white font-medium transition-colors shrink-0"
+                    className="shrink-0 rounded bg-purple-700 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-40"
                   >
                     {isRendering ? "…" : "Use"}
                   </button>
@@ -621,9 +633,9 @@ export default function AssetPicker({
             {/* Rendered / uploaded ambient files */}
             {userAssetsOfType("ambient").length > 0 && (
               <>
-                <p className="text-[11px] text-zinc-500 font-medium mt-2">My Files</p>
+                <p className="mt-2 text-[11px] font-medium text-zinc-500">My Files</p>
                 {userAssetsOfType("ambient").map((ua) => {
-                  const isSelected   = selectedAmbient?.id === ua.id;
+                  const isSelected = selectedAmbient?.id === ua.id;
                   const isPreviewing = audioPreviewId === ua.id;
                   return (
                     <UserAssetRow
@@ -647,7 +659,7 @@ export default function AssetPicker({
 
             <button
               onClick={() => onUploadAsset("ambient")}
-              className="mt-2 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+              className="mt-2 w-full rounded border border-dashed border-zinc-700 py-2 text-xs text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-300"
             >
               + Upload Ambient
             </button>
@@ -658,7 +670,9 @@ export default function AssetPicker({
         {activeTab === "video" && (
           <>
             {userAssetsOfType("video").length === 0 && (
-              <p className="text-xs text-zinc-600 text-center py-8">No videos yet. Upload a video loop or still image to get started.</p>
+              <p className="py-8 text-center text-xs text-zinc-600">
+                No videos yet. Upload a video loop or still image to get started.
+              </p>
             )}
             <div className="grid grid-cols-2 gap-2">
               {userAssetsOfType("video").map((ua) => {
@@ -667,7 +681,7 @@ export default function AssetPicker({
                 return (
                   <div
                     key={ua.id}
-                    className={`rounded-lg border overflow-hidden transition-all cursor-pointer ${
+                    className={`cursor-pointer overflow-hidden rounded-lg border transition-all ${
                       isSelected
                         ? "border-purple-500 bg-purple-950/20"
                         : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
@@ -678,7 +692,7 @@ export default function AssetPicker({
                       {isImagePath(ua.local_path) ? (
                         <img
                           src={convertFileSrc(ua.local_path)}
-                          className="w-full h-full object-cover"
+                          className="h-full w-full object-cover"
                           alt={ua.name}
                         />
                       ) : (
@@ -689,52 +703,68 @@ export default function AssetPicker({
                           loop
                           preload="metadata"
                           autoPlay={isPreviewing}
-                          className="w-full h-full object-cover"
+                          className="h-full w-full object-cover"
                           ref={(el) => {
                             if (!el) return;
-                            if (isPreviewing) { el.play().catch(() => {}); }
-                            else { el.pause(); el.currentTime = 0.1; }
+                            if (isPreviewing) {
+                              el.play().catch(() => {});
+                            } else {
+                              el.pause();
+                              el.currentTime = 0.1;
+                            }
                           }}
                         />
                       )}
                       {isSelected && (
-                        <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-purple-700 rounded-full flex items-center justify-center">
-                          <span className="text-white text-[10px] font-bold">✓</span>
+                        <div className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-purple-700">
+                          <span className="text-[10px] font-bold text-white">✓</span>
                         </div>
                       )}
                       {!isImagePath(ua.local_path) && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setVideoPreviewId(isPreviewing ? null : ua.id); }}
-                          className="absolute bottom-1.5 right-1.5 w-6 h-6 bg-zinc-900/80 hover:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-300 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setVideoPreviewId(isPreviewing ? null : ua.id);
+                          }}
+                          className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900/80 text-zinc-300 transition-colors hover:bg-zinc-800"
                         >
                           {isPreviewing ? <PauseIcon /> : <PlayIcon />}
                         </button>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 px-2.5 py-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-zinc-200 truncate">{ua.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-zinc-200">{ua.name}</p>
                         <p className="text-[10px] text-zinc-500">uploaded</p>
                       </div>
                       {confirmDeleteVideoId === ua.id ? (
-                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div
+                          className="flex shrink-0 items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
-                            onClick={() => { onDeleteUserAsset(ua.id); setConfirmDeleteVideoId(null); }}
-                            className="px-1.5 py-0.5 text-[10px] bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
+                            onClick={() => {
+                              onDeleteUserAsset(ua.id);
+                              setConfirmDeleteVideoId(null);
+                            }}
+                            className="rounded bg-red-800 px-1.5 py-0.5 text-[10px] text-red-200 transition-colors hover:bg-red-700"
                           >
                             Delete
                           </button>
                           <button
                             onClick={() => setConfirmDeleteVideoId(null)}
-                            className="px-1.5 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300 transition-colors"
+                            className="rounded bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-600"
                           >
                             Cancel
                           </button>
                         </div>
                       ) : (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteVideoId(ua.id); }}
-                          className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfirmDeleteVideoId(ua.id);
+                          }}
+                          className="shrink-0 text-xs text-zinc-600 transition-colors hover:text-red-400"
                         >
                           ✕
                         </button>
@@ -746,19 +776,18 @@ export default function AssetPicker({
             </div>
             <button
               onClick={() => onUploadAsset("video")}
-              className="mt-1 w-full py-2 rounded border border-dashed border-zinc-700 text-xs text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+              className="mt-1 w-full rounded border border-dashed border-zinc-700 py-2 text-xs text-zinc-500 transition-colors hover:border-zinc-600 hover:text-zinc-300"
             >
               + Upload Video / Image
             </button>
           </>
         )}
-
       </div>
     </div>
   );
 }
 
-// ── LibraryTrackRow ───────────────────────────────────────────────────────────
+// LibraryTrackRow
 
 function fmtDuration(s: number) {
   if (!s || !isFinite(s) || s <= 0) return "";
@@ -797,18 +826,34 @@ interface LibraryTrackRowProps {
 }
 
 function LibraryTrackRow({
-  asset, isSynth, isInPlaylist, isFavorited,
-  isPreviewing, isPreviewPlaying, previewProgress, duration,
-  isNowPlaying, isStreaming,
-  onTogglePlaylist, onPreview, onSeek, onFavorite, onDelete, onRename,
+  asset,
+  isSynth,
+  isInPlaylist,
+  isFavorited,
+  isPreviewing,
+  isPreviewPlaying,
+  previewProgress,
+  duration,
+  isNowPlaying,
+  isStreaming,
+  onTogglePlaylist,
+  onPreview,
+  onSeek,
+  onFavorite,
+  onDelete,
+  onRename,
 }: LibraryTrackRowProps) {
   const renameRef = useRef<HTMLInputElement | null>(null);
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(asset.name);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  useEffect(() => { setNameInput(asset.name); }, [asset.name]);
-  useEffect(() => { if (editing) renameRef.current?.select(); }, [editing]);
+  useEffect(() => {
+    setNameInput(asset.name);
+  }, [asset.name]);
+  useEffect(() => {
+    if (editing) renameRef.current?.select();
+  }, [editing]);
 
   const commitRename = () => {
     setEditing(false);
@@ -819,7 +864,7 @@ function LibraryTrackRow({
 
   const { title, artist } = parseTrackName(asset.name);
   const elapsed = duration > 0 ? fmtDuration(previewProgress * duration) : "";
-  const total   = fmtDuration(duration);
+  const total = fmtDuration(duration);
 
   const handleSeekClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -827,24 +872,28 @@ function LibraryTrackRow({
   };
 
   return (
-    <div className={`rounded-lg border transition-all ${
-      isInPlaylist ? "border-purple-500 bg-purple-950/20" : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
-    }`}>
+    <div
+      className={`rounded-lg border transition-all ${
+        isInPlaylist
+          ? "border-purple-500 bg-purple-950/20"
+          : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"
+      }`}
+    >
       <div className="flex items-center gap-2 px-3 py-2">
         {/* Play / pause */}
         <button
           onClick={onPreview}
           disabled={isStreaming}
-          className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-full flex items-center justify-center text-zinc-300 shrink-0 transition-colors relative"
+          className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-30"
         >
           {isPreviewing && isPreviewPlaying ? <PauseIcon /> : <PlayIcon />}
           {isNowPlaying && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-green-500" />
           )}
         </button>
 
         {/* Name + artist + badge */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           {editing ? (
             <input
               ref={renameRef}
@@ -853,36 +902,39 @@ function LibraryTrackRow({
               onBlur={commitRename}
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitRename();
-                if (e.key === "Escape") { setEditing(false); setNameInput(asset.name); }
+                if (e.key === "Escape") {
+                  setEditing(false);
+                  setNameInput(asset.name);
+                }
               }}
-              className="w-full bg-zinc-700 text-zinc-100 text-xs rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-purple-500"
+              className="w-full rounded bg-zinc-700 px-1.5 py-0.5 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-purple-500"
             />
           ) : (
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <p
-                  className={`text-xs font-medium text-zinc-200 truncate ${onRename ? "cursor-text hover:text-white" : ""}`}
+                  className={`truncate text-xs font-medium text-zinc-200 ${onRename ? "cursor-text hover:text-white" : ""}`}
                   title={onRename ? "Click to rename" : undefined}
                   onClick={() => onRename && setEditing(true)}
                 >
                   {title}
                 </p>
-                <span className={`text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 ${
-                  isSynth ? "bg-purple-900/60 text-purple-400" : "bg-blue-900/60 text-blue-400"
-                }`}>
+                <span
+                  className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold ${
+                    isSynth ? "bg-purple-900/60 text-purple-400" : "bg-blue-900/60 text-blue-400"
+                  }`}
+                >
                   {isSynth ? "synth" : "upload"}
                 </span>
               </div>
-              {artist && (
-                <p className="text-[10px] text-zinc-500 truncate mt-0.5">{artist}</p>
-              )}
+              {artist && <p className="mt-0.5 truncate text-[10px] text-zinc-500">{artist}</p>}
             </div>
           )}
         </div>
 
         {/* Duration */}
         {total && (
-          <span className="text-[10px] text-zinc-600 font-mono shrink-0 tabular-nums">
+          <span className="shrink-0 font-mono text-[10px] tabular-nums text-zinc-600">
             {isPreviewing && elapsed ? `${elapsed} / ${total}` : total}
           </span>
         )}
@@ -891,7 +943,7 @@ function LibraryTrackRow({
         <button
           onClick={onFavorite}
           title={isFavorited ? "Unfavorite" : "Favorite"}
-          className={`text-sm transition-colors shrink-0 ${
+          className={`shrink-0 text-sm transition-colors ${
             isFavorited ? "text-yellow-400" : "text-zinc-600 hover:text-yellow-400"
           }`}
         >
@@ -902,7 +954,7 @@ function LibraryTrackRow({
         <button
           onClick={() => !isStreaming && onTogglePlaylist()}
           disabled={isStreaming}
-          className={`text-[10px] font-medium px-2 py-0.5 rounded transition-colors shrink-0 disabled:opacity-40 ${
+          className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-medium transition-colors disabled:opacity-40 ${
             isInPlaylist
               ? "bg-purple-700/40 text-purple-300 hover:bg-red-900/40 hover:text-red-300"
               : "bg-zinc-700 text-zinc-300 hover:bg-purple-700 hover:text-white"
@@ -913,16 +965,19 @@ function LibraryTrackRow({
 
         {/* Delete */}
         {confirmingDelete ? (
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex shrink-0 items-center gap-1">
             <button
-              onClick={() => { setConfirmingDelete(false); onDelete(); }}
-              className="px-1.5 py-0.5 text-[10px] bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
+              onClick={() => {
+                setConfirmingDelete(false);
+                onDelete();
+              }}
+              className="rounded bg-red-800 px-1.5 py-0.5 text-[10px] text-red-200 transition-colors hover:bg-red-700"
             >
               Delete
             </button>
             <button
               onClick={() => setConfirmingDelete(false)}
-              className="px-1.5 py-0.5 text-[10px] bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300 transition-colors"
+              className="rounded bg-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 transition-colors hover:bg-zinc-600"
             >
               Cancel
             </button>
@@ -930,7 +985,7 @@ function LibraryTrackRow({
         ) : (
           <button
             onClick={() => setConfirmingDelete(true)}
-            className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0 ml-1"
+            className="ml-1 shrink-0 text-xs text-zinc-600 transition-colors hover:text-red-400"
           >
             ✕
           </button>
@@ -940,11 +995,11 @@ function LibraryTrackRow({
       {/* Seek bar */}
       {isPreviewing && (
         <div
-          className="mx-3 mb-2 h-1.5 bg-zinc-700 rounded-full cursor-pointer group"
+          className="group mx-3 mb-2 h-1.5 cursor-pointer rounded-full bg-zinc-700"
           onClick={handleSeekClick}
         >
           <div
-            className="h-full bg-purple-500 rounded-full group-hover:bg-purple-400 transition-colors"
+            className="h-full rounded-full bg-purple-500 transition-colors group-hover:bg-purple-400"
             style={{ width: `${previewProgress * 100}%` }}
           />
         </div>
@@ -953,7 +1008,7 @@ function LibraryTrackRow({
   );
 }
 
-// ── UserAssetRow ──────────────────────────────────────────────────────────────
+// UserAssetRow
 
 interface UserAssetRowProps {
   asset: UserAsset;
@@ -994,25 +1049,22 @@ function UserAssetRow({
         <button
           onClick={onPreview}
           disabled={isStreaming}
-          className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 rounded-full flex items-center justify-center text-zinc-300 transition-colors shrink-0 relative"
+          className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 transition-colors hover:bg-zinc-700 disabled:opacity-30"
         >
           {isPreviewing && isPreviewPlaying ? <PauseIcon /> : <PlayIcon />}
           {isNowPlaying && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-green-500" />
           )}
         </button>
-        <div
-          className="flex-1 min-w-0 cursor-pointer"
-          onClick={() => !isStreaming && onClick()}
-        >
-          <p className="text-xs font-medium text-zinc-200 truncate">{asset.name}</p>
+        <div className="min-w-0 flex-1 cursor-pointer" onClick={() => !isStreaming && onClick()}>
+          <p className="truncate text-xs font-medium text-zinc-200">{asset.name}</p>
           <p className="text-[10px] text-zinc-500">user upload</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="w-2 h-2 rounded-full bg-green-500 opacity-70" />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-green-500 opacity-70" />
           {badge !== undefined && (
-            <div className="w-5 h-5 bg-purple-700 rounded-full flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">{badge}</span>
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-700">
+              <span className="text-[10px] font-bold text-white">{badge}</span>
             </div>
           )}
           <button
@@ -1020,16 +1072,16 @@ function UserAssetRow({
               e.stopPropagation();
               onDelete();
             }}
-            className="text-zinc-600 hover:text-red-400 text-xs transition-colors ml-1"
+            className="ml-1 text-xs text-zinc-600 transition-colors hover:text-red-400"
           >
             ✕
           </button>
         </div>
       </div>
       {isPreviewing && (
-        <div className="mx-3 mb-2 h-1 bg-zinc-700 rounded-full">
+        <div className="mx-3 mb-2 h-1 rounded-full bg-zinc-700">
           <div
-            className="h-full bg-purple-500 rounded-full transition-all"
+            className="h-full rounded-full bg-purple-500 transition-all"
             style={{ width: `${previewProgress * 100}%` }}
           />
         </div>
@@ -1037,4 +1089,3 @@ function UserAssetRow({
     </div>
   );
 }
-

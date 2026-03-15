@@ -30,7 +30,7 @@ const ENCODING_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast"
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+    <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
       {children}
     </h3>
   );
@@ -47,24 +47,32 @@ function Tooltip({ text }: { text: string }) {
         onMouseLeave={() => setVisible(false)}
         onFocus={() => setVisible(true)}
         onBlur={() => setVisible(false)}
-        className="w-3.5 h-3.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-zinc-400 hover:text-zinc-200 flex items-center justify-center text-[9px] font-bold leading-none transition-colors select-none"
+        className="flex h-3.5 w-3.5 select-none items-center justify-center rounded-full bg-zinc-700 text-[9px] font-bold leading-none text-zinc-400 transition-colors hover:bg-zinc-600 hover:text-zinc-200"
         aria-label="More info"
       >
         ?
       </button>
       {visible && (
-        <div className="absolute left-5 top-1/2 -translate-y-1/2 z-50 w-56 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl pointer-events-none">
-          <p className="text-[11px] text-zinc-300 leading-relaxed">{text}</p>
+        <div className="pointer-events-none absolute left-5 top-1/2 z-50 w-56 -translate-y-1/2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 shadow-xl">
+          <p className="text-[11px] leading-relaxed text-zinc-300">{text}</p>
         </div>
       )}
     </div>
   );
 }
 
-function Row({ label, tooltip, children }: { label: string; tooltip?: string; children: React.ReactNode }) {
+function Row({
+  label,
+  tooltip,
+  children,
+}: {
+  label: string;
+  tooltip?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex shrink-0 items-center gap-1.5">
         <label className="text-xs text-zinc-400">{label}</label>
         {tooltip && <Tooltip text={tooltip} />}
       </div>
@@ -108,32 +116,34 @@ export default function SettingsPanel({
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-200 ${
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 ${
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
 
       {/* Panel */}
       <div
-        onTransitionEnd={() => { if (open) handleOpen(); }}
-        className={`fixed top-0 right-0 h-full z-50 bg-zinc-950 border-l border-zinc-800 flex flex-col transition-transform duration-200 ${
+        onTransitionEnd={() => {
+          if (open) handleOpen();
+        }}
+        className={`fixed right-0 top-0 z-50 flex h-full flex-col border-l border-zinc-800 bg-zinc-950 transition-transform duration-200 ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
         style={{ width: 420 }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-5 py-3.5">
           <span className="text-sm font-semibold text-zinc-100">Settings</span>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200 transition-colors text-sm"
+            className="flex h-7 w-7 items-center justify-center rounded bg-zinc-800 text-sm text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
           >
             ✕
           </button>
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-6">
+        <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-4">
           {/* ── Stream Quality ──────────────────────────────────────────────── */}
           <section>
             <SectionHeader>Stream Quality</SectionHeader>
@@ -145,10 +155,12 @@ export default function SettingsPanel({
                 <select
                   value={draft.video_bitrate}
                   onChange={(e) => set("video_bitrate", e.target.value)}
-                  className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-purple-500"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200 focus:border-purple-500 focus:outline-none"
                 >
                   {VIDEO_BITRATES.map((b) => (
-                    <option key={b} value={b}>{b}</option>
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
                   ))}
                 </select>
               </Row>
@@ -159,10 +171,12 @@ export default function SettingsPanel({
                 <select
                   value={draft.audio_bitrate}
                   onChange={(e) => set("audio_bitrate", e.target.value)}
-                  className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-purple-500"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200 focus:border-purple-500 focus:outline-none"
                 >
                   {AUDIO_BITRATES.map((b) => (
-                    <option key={b} value={b}>{b}</option>
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
                   ))}
                 </select>
               </Row>
@@ -173,10 +187,12 @@ export default function SettingsPanel({
                 <select
                   value={draft.frame_rate}
                   onChange={(e) => set("frame_rate", parseInt(e.target.value))}
-                  className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-purple-500"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200 focus:border-purple-500 focus:outline-none"
                 >
                   {FRAME_RATES.map((r) => (
-                    <option key={r} value={r}>{r} fps</option>
+                    <option key={r} value={r}>
+                      {r} fps
+                    </option>
                   ))}
                 </select>
               </Row>
@@ -187,10 +203,12 @@ export default function SettingsPanel({
                 <select
                   value={draft.encoding_preset}
                   onChange={(e) => set("encoding_preset", e.target.value)}
-                  className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded px-2 py-1.5 focus:outline-none focus:border-purple-500"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-200 focus:border-purple-500 focus:outline-none"
                 >
                   {ENCODING_PRESETS.map((p) => (
-                    <option key={p} value={p}>{p}</option>
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
                   ))}
                 </select>
               </Row>
@@ -210,17 +228,17 @@ export default function SettingsPanel({
                     placeholder="xxxx-xxxx-xxxx-xxxx"
                     value={ytKeyDraft}
                     onChange={(e) => setYtKeyDraft(e.target.value)}
-                    className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded px-3 py-1.5 focus:outline-none focus:border-purple-500 placeholder-zinc-600 font-mono"
+                    className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 font-mono text-xs text-zinc-200 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
                   />
                   <button
                     onClick={() => setShowYoutubeKey((v) => !v)}
-                    className="px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 text-zinc-400 text-xs transition-colors"
+                    className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
                   >
                     {showYoutubeKey ? "Hide" : "Show"}
                   </button>
                   <button
                     onClick={() => onSaveStreamKey("youtube", ytKeyDraft)}
-                    className="px-2.5 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-white text-xs font-medium transition-colors"
+                    className="rounded bg-purple-700 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-600"
                   >
                     Save
                   </button>
@@ -235,17 +253,17 @@ export default function SettingsPanel({
                     placeholder="live_xxxxxxxxxxxx"
                     value={twKeyDraft}
                     onChange={(e) => setTwKeyDraft(e.target.value)}
-                    className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-200 text-xs rounded px-3 py-1.5 focus:outline-none focus:border-purple-500 placeholder-zinc-600 font-mono"
+                    className="flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 font-mono text-xs text-zinc-200 placeholder-zinc-600 focus:border-purple-500 focus:outline-none"
                   />
                   <button
                     onClick={() => setShowTwitchKey((v) => !v)}
-                    className="px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded border border-zinc-700 text-zinc-400 text-xs transition-colors"
+                    className="rounded border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
                   >
                     {showTwitchKey ? "Hide" : "Show"}
                   </button>
                   <button
                     onClick={() => onSaveStreamKey("twitch", twKeyDraft)}
-                    className="px-2.5 py-1.5 bg-purple-700 hover:bg-purple-600 rounded text-white text-xs font-medium transition-colors"
+                    className="rounded bg-purple-700 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-600"
                   >
                     Save
                   </button>
@@ -257,9 +275,9 @@ export default function SettingsPanel({
           {/* ── Cache ───────────────────────────────────────────────────────── */}
           <section>
             <SectionHeader>Cache</SectionHeader>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 mb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-zinc-300 font-medium">
+            <div className="mb-3 rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-300">
                   Total: {formatBytes(cacheStats.total_bytes)}
                 </span>
                 <span className="text-[10px] text-zinc-500">{cacheStats.total_files} files</span>
@@ -267,46 +285,52 @@ export default function SettingsPanel({
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-zinc-500">Music</span>
-                  <span className="text-[11px] text-zinc-400">{formatBytes(cacheStats.music_bytes)}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {formatBytes(cacheStats.music_bytes)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-zinc-500">Ambient</span>
-                  <span className="text-[11px] text-zinc-400">{formatBytes(cacheStats.ambient_bytes)}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {formatBytes(cacheStats.ambient_bytes)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-zinc-500">Video</span>
-                  <span className="text-[11px] text-zinc-400">{formatBytes(cacheStats.video_bytes)}</span>
+                  <span className="text-[11px] text-zinc-400">
+                    {formatBytes(cacheStats.video_bytes)}
+                  </span>
                 </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => onClearCache()}
-                className="px-3 py-1.5 text-xs bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 rounded transition-colors"
+                className="rounded border border-red-800 bg-red-950 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-900"
               >
                 Clear All
               </button>
               <button
                 onClick={() => onClearCache("music")}
-                className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 rounded transition-colors"
+                className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
               >
                 Clear Music
               </button>
               <button
                 onClick={() => onClearCache("ambient")}
-                className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 rounded transition-colors"
+                className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
               >
                 Clear Ambient
               </button>
               <button
                 onClick={() => onClearCache("video")}
-                className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 rounded transition-colors"
+                className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
               >
                 Clear Video
               </button>
               <button
                 onClick={onRevealCache}
-                className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 rounded transition-colors"
+                className="rounded border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-700"
               >
                 Reveal Folder
               </button>
@@ -323,12 +347,12 @@ export default function SettingsPanel({
                 {userAssets.map((ua) => (
                   <div
                     key={ua.id}
-                    className="flex items-center gap-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg"
+                    className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-zinc-200 truncate">{ua.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-zinc-200">{ua.name}</p>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
                           {ua.asset_type}
                         </span>
                         {ua.file_size_bytes !== undefined && (
@@ -340,7 +364,7 @@ export default function SettingsPanel({
                     </div>
                     <button
                       onClick={() => onDeleteUserAsset(ua.id)}
-                      className="text-zinc-600 hover:text-red-400 text-xs transition-colors shrink-0"
+                      className="shrink-0 text-xs text-zinc-600 transition-colors hover:text-red-400"
                     >
                       ✕
                     </button>
@@ -354,20 +378,20 @@ export default function SettingsPanel({
           <section>
             <SectionHeader>About</SectionHeader>
             <div className="flex flex-col gap-1">
-              <p className="text-xs text-zinc-300 font-medium">Steadycast</p>
+              <p className="text-xs font-medium text-zinc-300">Steadycast</p>
               <p className="text-[11px] text-zinc-500">Version 0.1.0</p>
             </div>
           </section>
         </div>
 
         {/* Footer save button */}
-        <div className="px-5 py-3.5 border-t border-zinc-800 shrink-0">
+        <div className="shrink-0 border-t border-zinc-800 px-5 py-3.5">
           <button
             onClick={() => {
               onSaveSettings(draft);
               onClose();
             }}
-            className="w-full py-2.5 rounded-lg bg-purple-700 hover:bg-purple-600 text-white text-sm font-semibold transition-colors"
+            className="w-full rounded-lg bg-purple-700 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-600"
           >
             Save Settings
           </button>

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
-// ── Preview config state ──────────────────────────────────────────────────────
+// Preview config state
 
 /// Transient selection passed from the main window to the preview window.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -28,7 +28,7 @@ pub fn get_preview_config(state: tauri::State<'_, PreviewState>) -> PreviewConfi
     state.0.lock().unwrap().clone()
 }
 
-// ── Window commands ───────────────────────────────────────────────────────────
+// Window commands
 
 #[tauri::command]
 pub fn open_preview_window(app: AppHandle) -> Result<(), String> {

@@ -11,13 +11,25 @@ const hash = window.location.hash;
 let Root: React.ReactNode;
 if (hash.startsWith("#/preview")) {
   Root = (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen bg-zinc-900 text-zinc-400 text-sm">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-zinc-900 text-sm text-zinc-400">
+          Loading…
+        </div>
+      }
+    >
       <PreviewWindow />
     </Suspense>
   );
 } else if (hash.startsWith("#/logs")) {
   Root = (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen bg-zinc-900 text-zinc-400 text-sm">Loading…</div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-zinc-900 text-sm text-zinc-400">
+          Loading…
+        </div>
+      }
+    >
       <LogsWindow />
     </Suspense>
   );

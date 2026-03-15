@@ -27,11 +27,11 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
     warmth: 0.5,
   });
 
-  const engineRef    = useRef<SyntheticEngine | null>(null);
-  const regenTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const engineRef = useRef<SyntheticEngine | null>(null);
+  const regenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  const [renderJobs, setRenderJobs]           = useState<RenderJob[]>([]);
+  const [renderJobs, setRenderJobs] = useState<RenderJob[]>([]);
   const [completedRenders, setCompletedRenders] = useState<UserAsset[]>([]);
 
   const clearCompletedRender = useCallback((id: string) => {
@@ -42,7 +42,9 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
   const scheduleRegenerate = useCallback(() => {
     if (!engineRef.current) return;
     if (regenTimer.current) clearTimeout(regenTimer.current);
-    regenTimer.current = setTimeout(() => { engineRef.current?.regenerate(); }, 350);
+    regenTimer.current = setTimeout(() => {
+      engineRef.current?.regenerate();
+    }, 350);
   }, []);
 
   // Clear pending timer if preview stops
@@ -52,30 +54,36 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
       regenTimer.current = null;
     }
   }, [previewing]);
-  const queueRef   = useRef<Array<() => Promise<void>>>([]);
+  const queueRef = useRef<Array<() => Promise<void>>>([]);
   const runningRef = useRef(false);
 
-  // ── Config ────────────────────────────────────────────────────────────────
+  // Config
 
-  const updateConfig = useCallback((partial: Partial<SynthConfig>) => {
-    setConfig((prev) => {
-      let next: SynthConfig;
-      if (partial.drums) {
-        next = { ...prev, drums: { ...prev.drums, ...partial.drums } };
-      } else {
-        next = partial.vibe
-          ? { ...prev, ...partial, bpm: VIBE_DEFAULT_BPM[partial.vibe] }
-          : { ...prev, ...partial };
-      }
-      engineRef.current?.updateConfig(partial);
-      return next;
-    });
-    scheduleRegenerate();
-  }, [scheduleRegenerate]);
+  const updateConfig = useCallback(
+    (partial: Partial<SynthConfig>) => {
+      setConfig((prev) => {
+        let next: SynthConfig;
+        if (partial.drums) {
+          next = { ...prev, drums: { ...prev.drums, ...partial.drums } };
+        } else {
+          next = partial.vibe
+            ? { ...prev, ...partial, bpm: VIBE_DEFAULT_BPM[partial.vibe] }
+            : { ...prev, ...partial };
+        }
+        engineRef.current?.updateConfig(partial);
+        return next;
+      });
+      scheduleRegenerate();
+    },
+    [scheduleRegenerate]
+  );
 
   /** Replace the entire config at once (used by Randomize). Stops preview — user hits Play again. */
   const applyConfig = useCallback((newConfig: SynthConfig) => {
-    if (regenTimer.current) { clearTimeout(regenTimer.current); regenTimer.current = null; }
+    if (regenTimer.current) {
+      clearTimeout(regenTimer.current);
+      regenTimer.current = null;
+    }
     setConfig(newConfig);
     if (engineRef.current) {
       engineRef.current.stopPreview().finally(() => {
@@ -85,7 +93,7 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
     }
   }, []);
 
-  // ── Preview engine ────────────────────────────────────────────────────────
+  // Preview engine
 
   const regenerate = useCallback(() => {
     engineRef.current?.regenerate();
@@ -112,7 +120,7 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
     setPreviewing(false);
   }, [previewing]);
 
-  // ── Render queue ──────────────────────────────────────────────────────────
+  // Render queue
 
   const drain = useCallback(async () => {
     if (runningRef.current) return;
@@ -124,42 +132,46 @@ export function useSynth({ onTrackSaved, onAssetsChanged }: Callbacks) {
     runningRef.current = false;
   }, []);
 
-  const generateTrack = useCallback((durationSeconds: number) => {
-    const jobId    = `render-${Date.now()}-${Math.random()}`;
-    const name     = `Synth ${config.vibe}`;
-    const snapshot = { ...config, drums: { ...config.drums } };
+  const generateTrack = useCallback(
+    (durationSeconds: number) => {
+      const jobId = `render-${Date.now()}-${Math.random()}`;
+      const name = `Synth ${config.vibe}`;
+      const snapshot = { ...config, drums: { ...config.drums } };
 
-    setRenderJobs((prev) => [...prev, { id: jobId, label: name, progress: 0 }]);
+      setRenderJobs((prev) => [...prev, { id: jobId, label: name, progress: 0 }]);
 
-    queueRef.current.push(async () => {
+      queueRef.current.push(async () => {
+        try {
+          const { b64 } = await renderSynthTrack(snapshot, durationSeconds, (p) => {
+            setRenderJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, progress: p } : j)));
+          });
+          const asset = await invoke<UserAsset>("save_synth_track", { wavB64: b64, name });
+          await onAssetsChanged();
+          onTrackSaved(asset);
+          setCompletedRenders((prev) => [...prev, asset]);
+        } catch (e) {
+          console.error("Track generation failed:", e);
+        } finally {
+          setRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
+        }
+      });
+
+      drain();
+    },
+    [config, onAssetsChanged, onTrackSaved, drain]
+  );
+
+  const renameTrack = useCallback(
+    async (id: string, name: string) => {
       try {
-        const { b64 } = await renderSynthTrack(snapshot, durationSeconds, (p) => {
-          setRenderJobs((prev) =>
-            prev.map((j) => (j.id === jobId ? { ...j, progress: p } : j))
-          );
-        });
-        const asset = await invoke<UserAsset>("save_synth_track", { wavB64: b64, name });
+        await invoke("rename_user_asset", { id, name });
         await onAssetsChanged();
-        onTrackSaved(asset);
-        setCompletedRenders((prev) => [...prev, asset]);
       } catch (e) {
-        console.error("Track generation failed:", e);
-      } finally {
-        setRenderJobs((prev) => prev.filter((j) => j.id !== jobId));
+        console.error("Rename failed:", e);
       }
-    });
-
-    drain();
-  }, [config, onAssetsChanged, onTrackSaved, drain]);
-
-  const renameTrack = useCallback(async (id: string, name: string) => {
-    try {
-      await invoke("rename_user_asset", { id, name });
-      await onAssetsChanged();
-    } catch (e) {
-      console.error("Rename failed:", e);
-    }
-  }, [onAssetsChanged]);
+    },
+    [onAssetsChanged]
+  );
 
   return {
     config,

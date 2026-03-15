@@ -1,4 +1,4 @@
-// ── User assets ───────────────────────────────────────────────────────────────
+// User assets
 
 export interface UserAsset {
   id: string;
@@ -9,7 +9,7 @@ export interface UserAsset {
   cached_at: number;
 }
 
-// ── Presets ───────────────────────────────────────────────────────────────────
+// Presets
 
 export interface Preset {
   id: string;
@@ -23,7 +23,7 @@ export interface Preset {
   created_at: number;
 }
 
-// ── Settings ──────────────────────────────────────────────────────────────────
+// Settings
 
 export interface AppSettings {
   video_bitrate: string;
@@ -43,7 +43,7 @@ export interface CacheStats {
   total_files: number;
 }
 
-// ── Stream ────────────────────────────────────────────────────────────────────
+// Stream
 
 export type Platform = "youtube" | "twitch";
 

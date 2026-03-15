@@ -35,7 +35,7 @@ pub fn run() {
                 Manager,
             };
 
-            // ── DB / directories ─────────────────────────────────────────────
+            // DB / directories
             let app_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_dir)?;
             std::fs::create_dir_all(app_dir.join("cache"))?;
@@ -43,7 +43,7 @@ pub fn run() {
             let conn = db::init_db(&app_dir).map_err(|e| format!("DB init failed: {e}"))?;
             app.manage(db::DbState(std::sync::Mutex::new(conn)));
 
-            // ── System tray ───────────────────────────────────────────────────
+            // System tray
             let open_item = MenuItem::with_id(app, "open", "Open Steadycast", true, None::<&str>)?;
             let end_stream_item =
                 MenuItem::with_id(app, "end_stream", "End Stream", false, None::<&str>)?;
@@ -104,7 +104,7 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // ── Hide main window on close (macOS) ─────────────────────────────
+            // Hide main window on close (macOS)
             if let Some(win) = app.get_webview_window("main") {
                 win.on_window_event({
                     let win = win.clone();

@@ -41,41 +41,50 @@ const DEFAULT_CACHE: CacheStats = {
 };
 
 export default function App() {
-  // ── Data ───────────────────────────────────────────────────────────────────
-  const [presets, setPresets]           = useState<Preset[]>([]);
-  const [userAssets, setUserAssets]     = useState<UserAsset[]>([]);
-  const [settings, setSettings]         = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [cacheStats, setCacheStats]     = useState<CacheStats>(DEFAULT_CACHE);
+  // Data
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [userAssets, setUserAssets] = useState<UserAsset[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [cacheStats, setCacheStats] = useState<CacheStats>(DEFAULT_CACHE);
 
-  // ── Selection ──────────────────────────────────────────────────────────────
-  const [selectedVideo, setSelectedVideo]   = useState<UserAsset | null>(null);
-  const [selectedMusic, setSelectedMusic]   = useState<UserAsset[]>([]);
+  // Selection
+  const [selectedVideo, setSelectedVideo] = useState<UserAsset | null>(null);
+  const [selectedMusic, setSelectedMusic] = useState<UserAsset[]>([]);
   const [selectedAmbient, setSelectedAmbient] = useState<UserAsset | null>(null);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
 
-  // ── Stream ─────────────────────────────────────────────────────────────────
-  const [status, setStatus]         = useState<StreamStatus>({ is_running: false, elapsed_seconds: 0, current_track_index: 0 });
+  // Stream
+  const [status, setStatus] = useState<StreamStatus>({
+    is_running: false,
+    elapsed_seconds: 0,
+    current_track_index: 0,
+  });
   const [streamError, setStreamError] = useState<string | null>(null);
-  const [platform, setPlatform]     = useState<Platform>("youtube");
-  const [streamKey, setStreamKey]   = useState("");
-  const [streamKeys, setStreamKeys] = useState<{ youtube: string; twitch: string }>({ youtube: "", twitch: "" });
-  const [musicVolume, setMusicVolume]   = useState(0.8);
+  const [platform, setPlatform] = useState<Platform>("youtube");
+  const [streamKey, setStreamKey] = useState("");
+  const [streamKeys, setStreamKeys] = useState<{ youtube: string; twitch: string }>({
+    youtube: "",
+    twitch: "",
+  });
+  const [musicVolume, setMusicVolume] = useState(0.8);
   const [ambientVolume, setAmbientVolume] = useState(0.5);
   const [durationSeconds, setDurationSeconds] = useState<number | undefined>(undefined);
 
-  // ── UI ─────────────────────────────────────────────────────────────────────
+  // UI
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [panelWidth, setPanelWidth]     = useState(320);
+  const [panelWidth, setPanelWidth] = useState(320);
   const dragState = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!dragState.current) return;
-      const delta  = dragState.current.startX - e.clientX;
-      const maxW   = Math.floor(window.innerWidth / 2);
+      const delta = dragState.current.startX - e.clientX;
+      const maxW = Math.floor(window.innerWidth / 2);
       setPanelWidth(Math.min(maxW, Math.max(240, dragState.current.startWidth + delta)));
     };
-    const onUp = () => { dragState.current = null; };
+    const onUp = () => {
+      dragState.current = null;
+    };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
     return () => {
@@ -86,7 +95,7 @@ export default function App() {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Synthesizer ────────────────────────────────────────────────────────────
+  // Synthesizer
   const refreshUserAssets = useCallback(async () => {
     const ua = await invoke<UserAsset[]>("get_user_assets").catch(() => [] as UserAsset[]);
     setUserAssets(ua);
@@ -102,50 +111,67 @@ export default function App() {
     onAssetsChanged: refreshUserAssets,
   });
 
-  // ── Data loaders ──────────────────────────────────────────────────────────
+  // Data loaders
 
-  const loadPresets      = useCallback(async () => {
-    try { setPresets(await invoke<Preset[]>("get_presets")); } catch (_) {}
+  const loadPresets = useCallback(async () => {
+    try {
+      setPresets(await invoke<Preset[]>("get_presets"));
+    } catch (_) {}
   }, []);
 
-  const loadUserAssets   = useCallback(async () => {
-    try { setUserAssets(await invoke<UserAsset[]>("get_user_assets")); } catch (_) {}
+  const loadUserAssets = useCallback(async () => {
+    try {
+      setUserAssets(await invoke<UserAsset[]>("get_user_assets"));
+    } catch (_) {}
   }, []);
 
-  const loadCacheStats   = useCallback(async () => {
-    try { setCacheStats(await invoke<CacheStats>("get_cache_stats")); } catch (_) {}
+  const loadCacheStats = useCallback(async () => {
+    try {
+      setCacheStats(await invoke<CacheStats>("get_cache_stats"));
+    } catch (_) {}
   }, []);
 
-  // ── Bootstrap ─────────────────────────────────────────────────────────────
+  // Bootstrap
 
   useEffect(() => {
     loadPresets();
     loadUserAssets();
     loadCacheStats();
 
-    invoke<AppSettings>("get_settings").then((s) => {
-      setSettings(s);
-      setMusicVolume(s.music_volume);
-      setAmbientVolume(s.ambient_volume);
-      setPlatform(s.default_platform as Platform);
-    }).catch(() => {});
+    invoke<AppSettings>("get_settings")
+      .then((s) => {
+        setSettings(s);
+        setMusicVolume(s.music_volume);
+        setAmbientVolume(s.ambient_volume);
+        setPlatform(s.default_platform as Platform);
+      })
+      .catch(() => {});
 
-    invoke<Preferences>("get_preferences").then((prefs) => {
-      setPlatform(prefs.default_platform as Platform);
-      setMusicVolume(prefs.music_volume);
-      setAmbientVolume(prefs.ambient_volume);
-    }).catch(() => {});
+    invoke<Preferences>("get_preferences")
+      .then((prefs) => {
+        setPlatform(prefs.default_platform as Platform);
+        setMusicVolume(prefs.music_volume);
+        setAmbientVolume(prefs.ambient_volume);
+      })
+      .catch(() => {});
 
-    invoke<string>("get_stream_key", { platform: "youtube" }).then((key) => {
-      if (key) { setStreamKey(key); setStreamKeys((p) => ({ ...p, youtube: key })); }
-    }).catch(() => {});
+    invoke<string>("get_stream_key", { platform: "youtube" })
+      .then((key) => {
+        if (key) {
+          setStreamKey(key);
+          setStreamKeys((p) => ({ ...p, youtube: key }));
+        }
+      })
+      .catch(() => {});
 
-    invoke<string>("get_stream_key", { platform: "twitch" }).then((key) => {
-      if (key) setStreamKeys((p) => ({ ...p, twitch: key }));
-    }).catch(() => {});
+    invoke<string>("get_stream_key", { platform: "twitch" })
+      .then((key) => {
+        if (key) setStreamKeys((p) => ({ ...p, twitch: key }));
+      })
+      .catch(() => {});
   }, [loadPresets, loadUserAssets, loadCacheStats]);
 
-  // ── Stream status polling & events ────────────────────────────────────────
+  // Stream status polling & events
 
   useEffect(() => {
     pollRef.current = setInterval(async () => {
@@ -155,18 +181,24 @@ export default function App() {
         setCurrentTrackIndex(s.current_track_index);
       } catch (_) {}
     }, POLL_INTERVAL_MS);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen<TrackChangedPayload>("track-changed", (e) => {
       setCurrentTrackIndex(e.payload.track_index);
-    }).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
-  // ── Asset handlers ────────────────────────────────────────────────────────
+  // Asset handlers
 
   const handleToggleMusic = useCallback((asset: UserAsset) => {
     setSelectedMusic((prev) => {
@@ -175,56 +207,112 @@ export default function App() {
     });
   }, []);
 
-  const handleUploadAsset = useCallback(async (type: "video" | "music" | "ambient") => {
-    const videoFilters = [{ name: "Video / Image", extensions: ["mp4", "mov", "avi", "mkv", "jpg", "jpeg", "png", "webp", "gif"] }];
-    const audioFilters = [{ name: "Audio", extensions: ["mp3", "wav", "flac", "m4a", "ogg"] }];
-    try {
-      const selected = await open({ multiple: false, filters: type === "video" ? videoFilters : audioFilters });
-      if (!selected || Array.isArray(selected)) return;
-      const fileName = (selected as string).split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "Untitled";
-      await invoke("add_user_asset", { sourcePath: selected, assetType: type, name: fileName });
-      await loadUserAssets();
-    } catch (_) {}
-  }, [loadUserAssets]);
+  const handleUploadAsset = useCallback(
+    async (type: "video" | "music" | "ambient") => {
+      const videoFilters = [
+        {
+          name: "Video / Image",
+          extensions: ["mp4", "mov", "avi", "mkv", "jpg", "jpeg", "png", "webp", "gif"],
+        },
+      ];
+      const audioFilters = [{ name: "Audio", extensions: ["mp3", "wav", "flac", "m4a", "ogg"] }];
+      try {
+        const selected = await open({
+          multiple: false,
+          filters: type === "video" ? videoFilters : audioFilters,
+        });
+        if (!selected || Array.isArray(selected)) return;
+        const fileName =
+          (selected as string)
+            .split(/[\\/]/)
+            .pop()
+            ?.replace(/\.[^.]+$/, "") ?? "Untitled";
+        await invoke("add_user_asset", { sourcePath: selected, assetType: type, name: fileName });
+        await loadUserAssets();
+      } catch (_) {}
+    },
+    [loadUserAssets]
+  );
 
-  const handleDeleteUserAsset = useCallback(async (id: string) => {
-    try {
-      await invoke("delete_user_asset", { id });
-      await loadUserAssets();
-      setSelectedMusic((prev) => prev.filter((m) => m.id !== id));
-      setSelectedVideo((prev) => prev?.id === id ? null : prev);
-      setSelectedAmbient((prev) => prev?.id === id ? null : prev);
-    } catch (_) {}
-  }, [loadUserAssets]);
+  const handleDeleteUserAsset = useCallback(
+    async (id: string) => {
+      try {
+        await invoke("delete_user_asset", { id });
+        await loadUserAssets();
+        setSelectedMusic((prev) => prev.filter((m) => m.id !== id));
+        setSelectedVideo((prev) => (prev?.id === id ? null : prev));
+        setSelectedAmbient((prev) => (prev?.id === id ? null : prev));
+      } catch (_) {}
+    },
+    [loadUserAssets]
+  );
 
-  // ── Preset handlers ───────────────────────────────────────────────────────
+  // Preset handlers
 
-  const handleApplyPreset = useCallback((preset: Preset) => {
-    setSelectedVideo(preset.video_id ? (userAssets.find((a) => a.id === preset.video_id) ?? null) : null);
-    setSelectedMusic(preset.music_ids.map((id) => userAssets.find((a) => a.id === id)).filter((a): a is UserAsset => !!a));
-    setSelectedAmbient(preset.ambient_id ? (userAssets.find((a) => a.id === preset.ambient_id) ?? null) : null);
-  }, [userAssets]);
+  const handleApplyPreset = useCallback(
+    (preset: Preset) => {
+      setSelectedVideo(
+        preset.video_id ? (userAssets.find((a) => a.id === preset.video_id) ?? null) : null
+      );
+      setSelectedMusic(
+        preset.music_ids
+          .map((id) => userAssets.find((a) => a.id === id))
+          .filter((a): a is UserAsset => !!a)
+      );
+      setSelectedAmbient(
+        preset.ambient_id ? (userAssets.find((a) => a.id === preset.ambient_id) ?? null) : null
+      );
+    },
+    [userAssets]
+  );
 
-  const handleSavePreset = useCallback(async (name: string) => {
-    try {
-      await invoke("save_preset", { name, description: null, videoId: selectedVideo?.id ?? null, musicIds: selectedMusic.map((m) => m.id), ambientId: selectedAmbient?.id ?? null });
-      await loadPresets();
-    } catch (_) {}
-  }, [selectedVideo, selectedMusic, selectedAmbient, loadPresets]);
+  const handleSavePreset = useCallback(
+    async (name: string) => {
+      try {
+        await invoke("save_preset", {
+          name,
+          description: null,
+          videoId: selectedVideo?.id ?? null,
+          musicIds: selectedMusic.map((m) => m.id),
+          ambientId: selectedAmbient?.id ?? null,
+        });
+        await loadPresets();
+      } catch (_) {}
+    },
+    [selectedVideo, selectedMusic, selectedAmbient, loadPresets]
+  );
 
-  const handleRenamePreset = useCallback(async (id: string, name: string) => {
-    try { await invoke("rename_preset", { id, name }); await loadPresets(); } catch (_) {}
-  }, [loadPresets]);
+  const handleRenamePreset = useCallback(
+    async (id: string, name: string) => {
+      try {
+        await invoke("rename_preset", { id, name });
+        await loadPresets();
+      } catch (_) {}
+    },
+    [loadPresets]
+  );
 
-  const handleDeletePreset = useCallback(async (id: string) => {
-    try { await invoke("delete_preset", { id }); await loadPresets(); } catch (_) {}
-  }, [loadPresets]);
+  const handleDeletePreset = useCallback(
+    async (id: string) => {
+      try {
+        await invoke("delete_preset", { id });
+        await loadPresets();
+      } catch (_) {}
+    },
+    [loadPresets]
+  );
 
-  const handleImportPresetUrl = useCallback(async (url: string) => {
-    try { await invoke("import_preset_from_url", { url }); await loadPresets(); } catch (_) {}
-  }, [loadPresets]);
+  const handleImportPresetUrl = useCallback(
+    async (url: string) => {
+      try {
+        await invoke("import_preset_from_url", { url });
+        await loadPresets();
+      } catch (_) {}
+    },
+    [loadPresets]
+  );
 
-  // ── Settings & stream key handlers ────────────────────────────────────────
+  // Settings & stream key handlers
 
   const handleSaveSettings = useCallback(async (s: AppSettings) => {
     try {
@@ -235,30 +323,43 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  const handleClearCache = useCallback(async (type?: string) => {
-    try {
-      await invoke("clear_cache", { assetType: type ?? null });
-      await loadCacheStats();
-    } catch (_) {}
-  }, [loadCacheStats]);
+  const handleClearCache = useCallback(
+    async (type?: string) => {
+      try {
+        await invoke("clear_cache", { assetType: type ?? null });
+        await loadCacheStats();
+      } catch (_) {}
+    },
+    [loadCacheStats]
+  );
 
-  const handleSaveStreamKey = useCallback(async (p: "youtube" | "twitch", key: string) => {
-    try {
-      await invoke("save_stream_key", { platform: p, key });
-      setStreamKeys((prev) => ({ ...prev, [p]: key }));
-      if (p === platform) setStreamKey(key);
-    } catch (_) {}
-  }, [platform]);
+  const handleSaveStreamKey = useCallback(
+    async (p: "youtube" | "twitch", key: string) => {
+      try {
+        await invoke("save_stream_key", { platform: p, key });
+        setStreamKeys((prev) => ({ ...prev, [p]: key }));
+        if (p === platform) setStreamKey(key);
+      } catch (_) {}
+    },
+    [platform]
+  );
 
-  // ── Stream control ────────────────────────────────────────────────────────
+  // Stream control
 
   const handleStartStream = useCallback(async () => {
-    if (!selectedVideo?.local_path) { setStreamError("Select a video loop first."); return; }
-    if (!streamKey.trim()) { setStreamError("Enter your stream key."); return; }
+    if (!selectedVideo?.local_path) {
+      setStreamError("Select a video loop first.");
+      return;
+    }
+    if (!streamKey.trim()) {
+      setStreamError("Enter your stream key.");
+      return;
+    }
 
     const readyMusic = selectedMusic.filter((m) => !!m.local_path);
     if (selectedMusic.length > 0 && readyMusic.length === 0) {
-      setStreamError("Selected music tracks are not downloaded yet."); return;
+      setStreamError("Selected music tracks are not downloaded yet.");
+      return;
     }
 
     setStreamError(null);
@@ -281,18 +382,35 @@ export default function App() {
           duration_seconds: durationSeconds ?? null,
         },
       });
-    } catch (e) { setStreamError(String(e)); }
-  }, [selectedVideo, selectedMusic, selectedAmbient, streamKey, musicVolume, ambientVolume, platform, durationSeconds, synth, ambient]);
+    } catch (e) {
+      setStreamError(String(e));
+    }
+  }, [
+    selectedVideo,
+    selectedMusic,
+    selectedAmbient,
+    streamKey,
+    musicVolume,
+    ambientVolume,
+    platform,
+    durationSeconds,
+    synth,
+    ambient,
+  ]);
 
   const handleStopStream = useCallback(async () => {
-    try { await invoke("stop_stream"); setStreamError(null); }
-    catch (e) { setStreamError(String(e)); }
+    try {
+      await invoke("stop_stream");
+      setStreamError(null);
+    } catch (e) {
+      setStreamError(String(e));
+    }
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden">
       <AppHeader
         status={status}
         renderJobs={synth.renderJobs}
@@ -304,13 +422,13 @@ export default function App() {
       />
 
       {streamError && (
-        <div className="px-5 py-2 bg-red-950 border-b border-red-800 text-red-300 text-xs">
+        <div className="border-b border-red-800 bg-red-950 px-5 py-2 text-xs text-red-300">
           {streamError}
         </div>
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex flex-1 flex-col overflow-hidden">
           <AssetPicker
             presets={presets}
             userAssets={userAssets}
@@ -345,14 +463,17 @@ export default function App() {
           />
         </div>
 
-        <div style={{ width: panelWidth }} className="shrink-0 overflow-y-auto relative border-l border-zinc-800">
+        <div
+          style={{ width: panelWidth }}
+          className="relative shrink-0 overflow-y-auto border-l border-zinc-800"
+        >
           {/* Drag handle */}
           <div
             onMouseDown={(e) => {
               dragState.current = { startX: e.clientX, startWidth: panelWidth };
               e.preventDefault();
             }}
-            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-purple-500/50 active:bg-purple-500 transition-colors z-10"
+            className="absolute bottom-0 left-0 top-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-purple-500/50 active:bg-purple-500"
           />
           <StreamConfig
             platform={platform}
