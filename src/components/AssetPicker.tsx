@@ -158,6 +158,7 @@ export default function AssetPicker({
   const [savePresetName, setSavePresetName] = useState("");
   const [importUrl, setImportUrl] = useState("");
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -382,12 +383,30 @@ export default function AssetPicker({
                           Apply
                         </button>
                         {!p.is_builtin && (
-                          <button
-                            onClick={() => onDeletePreset(p.id)}
-                            className="px-2 py-1 text-xs bg-zinc-800 hover:bg-red-900 rounded text-zinc-400 hover:text-red-400 transition-colors"
-                          >
-                            ✕
-                          </button>
+                          confirmDeleteId === p.id ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-zinc-400">Delete?</span>
+                              <button
+                                onClick={() => { onDeletePreset(p.id); setConfirmDeleteId(null); }}
+                                className="px-2 py-1 text-xs bg-red-800 hover:bg-red-700 rounded text-red-200 transition-colors"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="px-2 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 rounded text-zinc-300 transition-colors"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteId(p.id)}
+                              className="px-2 py-1 text-xs bg-zinc-800 hover:bg-red-900 rounded text-zinc-400 hover:text-red-400 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
