@@ -96,7 +96,7 @@ export default function AssetPicker({
   onRenameSynthTrack,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("music");
-  const [musicSubTab, setMusicSubTab] = useState<MusicSubTab>("synthesizer");
+  const [musicSubTab, setMusicSubTab] = useState<MusicSubTab>("library");
   const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>("all");
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(() => {
     try {
@@ -391,7 +391,7 @@ export default function AssetPicker({
           <>
             {/* Sub-tab navigation */}
             <div className="flex gap-1 mb-2">
-              {(["synthesizer", "library"] as MusicSubTab[]).map((st) => (
+              {(["library", "synthesizer"] as MusicSubTab[]).map((st) => (
                 <button
                   key={st}
                   onClick={() => setMusicSubTab(st)}
@@ -403,7 +403,7 @@ export default function AssetPicker({
                 >
                   {st === "library"
                     ? `Library${userAssetsOfType("music").length > 0 ? ` (${userAssetsOfType("music").length})` : ""}`
-                    : "Synthesizer"}
+                    : "Synthesizer (beta)"}
                 </button>
               ))}
             </div>
