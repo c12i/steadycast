@@ -23,6 +23,7 @@ interface Props {
   onSelectAmbient: (a: UserAsset | null) => void;
   onApplyPreset: (p: Preset) => void;
   onSavePreset: (name: string) => void;
+  onRenamePreset: (id: string, name: string) => void;
   onDeletePreset: (id: string) => void;
   onImportPresetUrl: (url: string) => void;
   onUploadAsset: (type: "video" | "music" | "ambient") => void;
@@ -77,6 +78,7 @@ export default function AssetPicker({
   onSelectAmbient,
   onApplyPreset,
   onSavePreset,
+  onRenamePreset,
   onDeletePreset,
   onImportPresetUrl,
   onUploadAsset,
@@ -111,7 +113,9 @@ export default function AssetPicker({
   const [videoPreviewId, setVideoPreviewId] = useState<string | null>(null);
   const [savePresetName, setSavePresetName] = useState("");
   const [importUrl, setImportUrl] = useState("");
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId]   = useState<string | null>(null);
+  const [renamingPresetId, setRenamingPresetId] = useState<string | null>(null);
+  const [renameInput, setRenameInput]           = useState("");
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -293,7 +297,36 @@ export default function AssetPicker({
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-zinc-200 truncate">{p.name}</span>
+                          {renamingPresetId === p.id ? (
+                            <input
+                              autoFocus
+                              value={renameInput}
+                              onChange={(e) => setRenameInput(e.target.value)}
+                              onBlur={() => setRenamingPresetId(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const t = renameInput.trim();
+                                  if (t && t !== p.name) onRenamePreset(p.id, t);
+                                  setRenamingPresetId(null);
+                                }
+                                if (e.key === "Escape") setRenamingPresetId(null);
+                              }}
+                              className="flex-1 bg-zinc-700 text-zinc-100 text-xs rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-purple-500 min-w-0"
+                            />
+                          ) : (
+                            <span
+                              className={`text-sm font-medium text-zinc-200 truncate ${!p.is_builtin ? "cursor-text hover:text-white" : ""}`}
+                              title={!p.is_builtin ? "Click to rename" : undefined}
+                              onClick={() => {
+                                if (!p.is_builtin) {
+                                  setRenamingPresetId(p.id);
+                                  setRenameInput(p.name);
+                                }
+                              }}
+                            >
+                              {p.name}
+                            </span>
+                          )}
                           {p.is_builtin && (
                             <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded shrink-0">
                               built-in

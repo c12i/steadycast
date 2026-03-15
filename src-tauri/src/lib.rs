@@ -55,6 +55,7 @@ pub fn run() {
             // Presets
             presets::get_presets,
             presets::save_preset,
+            presets::rename_preset,
             presets::delete_preset,
             presets::import_preset_from_url,
             presets::export_preset,

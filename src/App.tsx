@@ -212,6 +212,10 @@ export default function App() {
     } catch (_) {}
   }, [selectedVideo, selectedMusic, selectedAmbient, loadPresets]);
 
+  const handleRenamePreset = useCallback(async (id: string, name: string) => {
+    try { await invoke("rename_preset", { id, name }); await loadPresets(); } catch (_) {}
+  }, [loadPresets]);
+
   const handleDeletePreset = useCallback(async (id: string) => {
     try { await invoke("delete_preset", { id }); await loadPresets(); } catch (_) {}
   }, [loadPresets]);
@@ -320,6 +324,7 @@ export default function App() {
             onSelectAmbient={setSelectedAmbient}
             onApplyPreset={handleApplyPreset}
             onSavePreset={handleSavePreset}
+            onRenamePreset={handleRenamePreset}
             onDeletePreset={handleDeletePreset}
             onImportPresetUrl={handleImportPresetUrl}
             onUploadAsset={handleUploadAsset}

@@ -112,6 +112,21 @@ pub fn save_preset(
 }
 
 #[tauri::command]
+pub fn rename_preset(
+    state: tauri::State<'_, DbState>,
+    id: String,
+    name: String,
+) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    conn.execute(
+        "UPDATE presets SET name = ?1 WHERE id = ?2 AND is_builtin = 0",
+        params![name, id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn delete_preset(state: tauri::State<'_, DbState>, id: String) -> Result<(), String> {
     let conn = state.0.lock().unwrap();
     conn.execute(
