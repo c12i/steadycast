@@ -1,5 +1,20 @@
+//! Lofi Stream Studio — Tauri backend entry point.
+//!
+//! Module responsibilities:
+//!   stream      — FFmpeg process lifecycle, playlist cycling, RTMP output
+//!   library     — asset catalog (fetch, download, cache)
+//!   user_assets — user-uploaded files and synthesizer-generated tracks
+//!   presets     — save/load/share stream configurations
+//!   settings    — quality settings, playback preferences, cache management
+//!   keys        — stream key storage (YouTube / Twitch)
+//!   db          — SQLite connection and schema bootstrap
+//!   windows     — secondary Tauri windows (preview, logs)
+//!   assets      — legacy manifest downloader (kept for back-compat)
+//!   license     — license validation stub
+
 mod assets;
 mod db;
+mod keys;
 mod library;
 mod license;
 mod presets;
@@ -19,7 +34,6 @@ pub fn run() {
             use tauri::Manager;
             let app_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&app_dir)?;
-            // Ensure cache and user_assets subdirs exist
             std::fs::create_dir_all(app_dir.join("cache"))?;
             std::fs::create_dir_all(app_dir.join("user_assets"))?;
             let conn = db::init_db(&app_dir).map_err(|e| format!("DB init failed: {e}"))?;
@@ -50,23 +64,24 @@ pub fn run() {
             presets::delete_preset,
             presets::import_preset_from_url,
             presets::export_preset,
-            // Settings
+            // Settings & preferences
             settings::get_settings,
             settings::save_settings,
+            settings::get_preferences,
+            settings::save_preferences,
             settings::get_cache_stats,
             settings::clear_cache,
             settings::reveal_cache_folder,
-            // Legacy manifest import (kept for compatibility)
-            assets::download_assets,
-            // Auth / keys
-            license::validate_license,
-            db::save_stream_key,
-            db::get_stream_key,
-            db::get_preferences,
-            db::save_preferences,
+            // Stream keys
+            keys::save_stream_key,
+            keys::get_stream_key,
             // Windows
             windows::open_preview_window,
             windows::open_logs_window,
+            // Legacy manifest import
+            assets::download_assets,
+            // License
+            license::validate_license,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
